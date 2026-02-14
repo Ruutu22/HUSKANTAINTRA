@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Shield, UserCircle, Stethoscope } from 'lucide-react';
+import { AlertCircle, Shield, UserCircle, Stethoscope, UserPlus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PatientRegistrationPage } from './PatientRegistrationPage';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -14,6 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loginType, setLoginType] = useState<'staff' | 'patient'>('staff');
+  const [showRegistration, setShowRegistration] = useState(false);
   const { login, loginAsPatient } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +44,10 @@ export function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (showRegistration) {
+    return <PatientRegistrationPage onRegistered={() => setShowRegistration(false)} />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0066b3]/10 via-white to-[#00a8b3]/10 p-4">
@@ -169,6 +175,20 @@ export function LoginPage() {
               <p>© 2025 Helsinki-Uusimaan sairaanhoitopiiri</p>
               <p className="mt-1">Versio 2.0 - .ruutu alustalla</p>
             </div>
+
+            {loginType === 'patient' && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-3 text-center">Sinulla ei ole vielä tunnuksia?</p>
+                <Button
+                  onClick={() => setShowRegistration(true)}
+                  variant="outline"
+                  className="w-full h-11 border-2 border-green-500 text-green-600 hover:bg-green-50"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Rekisteröidy potilaaaksi
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
