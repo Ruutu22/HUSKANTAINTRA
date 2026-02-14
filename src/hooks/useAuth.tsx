@@ -152,13 +152,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAsPatient = useCallback(async (username: string, password: string): Promise<boolean> => {
     // Check patient accounts from localStorage
     const accounts = JSON.parse(localStorage.getItem('hus_patient_accounts') || '[]');
-    const account = accounts.find((a: PatientAccount) => 
-      a.username === username && a.password === password && a.isActive
+    const account = accounts.find((a: any) => 
+      a.username === username && a.password === password && a.isActive === true
     );
     
     if (account) {
-      if (account.expiresAt && new Date(account.expiresAt) < new Date()) {
-        return false; // Account expired
+      // Check expiration (handle string dates from JSON)
+      if (account.expiresAt) {
+        const expiryDate = new Date(account.expiresAt);
+        if (expiryDate < new Date()) {
+          return false; // Account expired
+        }
       }
       
       setPatientAccount(account);

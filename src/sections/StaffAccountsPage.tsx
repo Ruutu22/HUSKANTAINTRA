@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -19,7 +20,6 @@ import {
   Copy,
   Check,
   Save,
-  X
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -261,111 +261,112 @@ export function StaffAccountsPage() {
       </div>
 
       {/* Create Staff Account Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateDialog(false); }}>
-          <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">Luo henkilökunnan tunnus</h3>
-              <button onClick={() => setShowCreateDialog(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+      <Sheet open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <SheetContent side="right" className="w-full sm:w-[500px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Luo henkilökunnan tunnus</SheetTitle>
+            <SheetDescription>
+              Täytä tiedot ja aseta käyttöoikeudet
+            </SheetDescription>
+          </SheetHeader>
+          
+          <div className="space-y-4 py-6">
+            <div>
+              <Label className="text-sm font-medium">Nimi *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Esim. Matti Meikäläinen" className="mt-1" />
             </div>
-            <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">Nimi *</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Esim. Matti Meikäläinen" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Käyttäjätunnus *</Label>
-                  <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Esim. matti.meikalainen" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Rooli *</Label>
-                  <Select value={role} onValueChange={(v) => {
-                    setRole(v as UserRole);
-                    setPermissions(p => ({
-                      ...p,
-                      canApproveConfidential: v === 'JYL' || v === 'ERIKOISLÄÄKÄRI'
-                    }));
-                  }}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STAFF_ROLES.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Tehtävänkuva</Label>
-                  <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Esim. Sairaanhoitaja" className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Salasana *</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Salasana" type="text" className="flex-1" />
-                    <Button variant="outline" onClick={() => setPassword(generatePassword())} type="button">Arvo</Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-sm font-medium">Voimassaolo *</Label>
-                    <Input 
-                      type="number" 
-                      value={expiryValue} 
-                      onChange={(e) => setExpiryValue(e.target.value)} 
-                      min="1" 
-                      placeholder="Arvo"
-                      className="mt-1" 
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Yksikkö *</Label>
-                    <Select value={expiryUnit} onValueChange={(v) => setExpiryUnit(v as any)}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="minutes">Minuutti</SelectItem>
-                        <SelectItem value="hours">Tunti</SelectItem>
-                        <SelectItem value="days">Päivä</SelectItem>
-                        <SelectItem value="months">Kuukausi</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">Käyttöoikeudet</Label>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewTallennetut} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewTallennetut: !!c }))} /><span className="text-sm">Tallennetut lomakkeet</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewUusi} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewUusi: !!c }))} /><span className="text-sm">Uusi lomake</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewArkistoidut} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewArkistoidut: !!c }))} /><span className="text-sm">Arkistoidut lomakkeet</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewPohjat} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewPohjat: !!c }))} /><span className="text-sm">Pohjat</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewMuokkaa} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewMuokkaa: !!c }))} /><span className="text-sm">Muokkaa</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewReseptit} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewReseptit: !!c }))} /><span className="text-sm">Reseptit</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewKayttajat} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewKayttajat: !!c }))} /><span className="text-sm">Käyttäjäthallinta</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewOhjeistukset} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewOhjeistukset: !!c }))} /><span className="text-sm">Ohjeistukset</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewRaportit} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewRaportit: !!c }))} /><span className="text-sm">Raportit</span></div>
-                    <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewVuorot} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewVuorot: !!c }))} /><span className="text-sm">Vuorot</span></div>
-                    {(role === 'JYL' || role === 'ERIKOISLÄÄKÄRI') && (
-                      <div className="flex items-center gap-2"><Checkbox checked={permissions.canApproveConfidential} onCheckedChange={(c) => setPermissions(p => ({ ...p, canApproveConfidential: !!c }))} /><span className="text-sm">Hyväksy luottamuksellisia</span></div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="flex-1">Peruuta</Button>
-                  <Button 
-                    onClick={handleCreate}
-                    disabled={!name.trim() || !username.trim() || !password.trim() || !expiryValue}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500"
-                  >
-                    <Save className="w-4 h-4 mr-2" />Luo tunnus
-                  </Button>
-                </div>
+            <div>
+              <Label className="text-sm font-medium">Käyttäjätunnus *</Label>
+              <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Esim. matti.meikalainen" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Rooli *</Label>
+              <Select value={role} onValueChange={(v) => {
+                setRole(v as UserRole);
+                setPermissions(p => ({
+                  ...p,
+                  canApproveConfidential: v === 'JYL' || v === 'ERIKOISLÄÄKÄRI'
+                }));
+              }}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STAFF_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Tehtävänkuva</Label>
+              <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Esim. Sairaanhoitaja" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Salasana *</Label>
+              <div className="flex gap-2 mt-1">
+                <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Salasana" type="text" className="flex-1" />
+                <Button variant="outline" onClick={() => setPassword(generatePassword())} type="button">Arvo</Button>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm font-medium">Voimassaolo *</Label>
+                <Input 
+                  type="number" 
+                  value={expiryValue} 
+                  onChange={(e) => setExpiryValue(e.target.value)} 
+                  min="1" 
+                  placeholder="Arvo"
+                  className="mt-1" 
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Yksikkö *</Label>
+                <Select value={expiryUnit} onValueChange={(v) => setExpiryUnit(v as any)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="minutes">Minuutti</SelectItem>
+                    <SelectItem value="hours">Tunti</SelectItem>
+                    <SelectItem value="days">Päivä</SelectItem>
+                    <SelectItem value="months">Kuukausi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Käyttöoikeudet</Label>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewTallennetut} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewTallennetut: !!c }))} /><span className="text-sm">Tallennetut lomakkeet</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewUusi} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewUusi: !!c }))} /><span className="text-sm">Uusi lomake</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewArkistoidut} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewArkistoidut: !!c }))} /><span className="text-sm">Arkistoidut lomakkeet</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewPohjat} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewPohjat: !!c }))} /><span className="text-sm">Pohjat</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewMuokkaa} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewMuokkaa: !!c }))} /><span className="text-sm">Muokkaa</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewReseptit} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewReseptit: !!c }))} /><span className="text-sm">Reseptit</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewKayttajat} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewKayttajat: !!c }))} /><span className="text-sm">Käyttäjäthallinta</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewOhjeistukset} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewOhjeistukset: !!c }))} /><span className="text-sm">Ohjeistukset</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewRaportit} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewRaportit: !!c }))} /><span className="text-sm">Raportit</span></div>
+                <div className="flex items-center gap-2"><Checkbox checked={permissions.canViewVuorot} onCheckedChange={(c) => setPermissions(p => ({ ...p, canViewVuorot: !!c }))} /><span className="text-sm">Vuorot</span></div>
+                {(role === 'JYL' || role === 'ERIKOISLÄÄKÄRI') && (
+                  <div className="flex items-center gap-2"><Checkbox checked={permissions.canApproveConfidential} onCheckedChange={(c) => setPermissions(p => ({ ...p, canApproveConfidential: !!c }))} /><span className="text-sm">Hyväksy luottamuksellisia</span></div>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="flex-1">
+                Peruuta
+              </Button>
+              <Button 
+                onClick={handleCreate}
+                disabled={!name.trim() || !username.trim() || !password.trim() || !expiryValue}
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-500"
+              >
+                <Save className="w-4 h-4 mr-2" />Luo tunnus
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
