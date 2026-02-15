@@ -32,7 +32,7 @@ const COMMON_LAB_TESTS = [
 
 export function LabraPage() {
   const { user } = useAuth();
-  const { orders, createOrder, completeOrder, getPendingOrders } = useLabOrders();
+  const { orders, createOrder, completeOrder, updateOrder, getPendingOrders } = useLabOrders();
   const { patients, searchPatients } = usePatients();
   const { addLog } = useAuditLogs();
 
@@ -105,6 +105,26 @@ export function LabraPage() {
     });
 
     setSelectedOrder(null);
+    setResultsText('');
+  };
+
+  const handleSendForTesting = (orderId: string) => {
+    if (!user) return;
+    
+    updateOrder(orderId, { status: 'in_progress' });
+    
+    addLog({
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'update_form',
+      targetName: `Labratilaus ${orderId}`,
+      details: 'Lähetetty tutkimukseen',
+    });
+  };
+
+  const handleOpenResults = (order: any) => {
+    setSelectedOrder(order);
     setResultsText('');
   };
 
@@ -231,11 +251,31 @@ export function LabraPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex flex-col items-end gap-2">
                       <Badge className={getPriorityColor(order.priority)}>
                         {order.priority === 'stat' ? 'STAT' : order.priority === 'urgent' ? 'Kiireellinen' : 'Normaali'}
                       </Badge>
-                      <p className="text-sm text-gray-500 mt-1">{order.orderedByName}</p>
+                      <p className="text-sm text-gray-500">{order.orderedByName}</p>
+                      <div className="flex gap-2 mt-2">
+                        {order.status === 'pending' && !user?.isPatient && (
+                          <Button 
+                            onClick={() => handleSendForTesting(order.id)}
+                            size="sm" 
+                            className="bg-orange-500 hover:bg-orange-600 text-white"
+                          >
+                            <Clock className="w-3 h-3 mr-1" />
+                            Lähetä tutkimukseen
+                          </Button>
+                        )}
+                        <Button 
+                          onClick={() => handleOpenResults(order)}
+                          size="sm" 
+                          variant="outline"
+                        >
+                          <FileText className="w-3 h-3 mr-1" />
+                          {order.results ? 'Katsele tuloksia' : 'Kirjaa tuloksia'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

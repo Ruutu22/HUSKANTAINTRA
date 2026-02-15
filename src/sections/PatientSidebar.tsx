@@ -8,7 +8,8 @@ import {
   MessageCircle,
   LogOut,
   ChevronRight,
-  Shield
+  Shield,
+  Users
 } from 'lucide-react';
 
 interface PatientSidebarProps {
@@ -27,6 +28,7 @@ export function PatientSidebar({ activeTab, onTabChange }: PatientSidebarProps) 
   const navItems = [
     { id: 'overview', label: 'Omat tiedot', icon: UserCircle },
     { id: 'appointments', label: 'Ajanvaraus', icon: Calendar },
+    { id: 'staff', label: 'Henkilökunta', icon: Users },
     { id: 'messages', label: 'Viestit', icon: MessageCircle },
     { id: 'feedback', label: 'Anna palautetta', icon: MessageSquare },
   ];

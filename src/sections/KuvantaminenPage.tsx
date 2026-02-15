@@ -29,7 +29,7 @@ const BODY_PARTS = [
 
 export function KuvantaminenPage() {
   const { user } = useAuth();
-  const { studies, createStudy, addReport, getPendingStudies } = useImagingStudies();
+  const { studies, createStudy, addReport, updateStudy, getPendingStudies } = useImagingStudies();
   const { patients, searchPatients } = usePatients();
   const { addLog } = useAuditLogs();
 
@@ -94,6 +94,26 @@ export function KuvantaminenPage() {
     });
 
     setSelectedStudy(null);
+    setReportText('');
+  };
+
+  const handleScheduleStudy = (studyId: string) => {
+    if (!user) return;
+    
+    updateStudy(studyId, { status: 'scheduled' });
+    
+    addLog({
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'update_form',
+      targetName: `Kuvantamistutkimus ${studyId}`,
+      details: 'Aikataulutettu suoritukselle',
+    });
+  };
+
+  const handleOpenReport = (study: any) => {
+    setSelectedStudy(study);
     setReportText('');
   };
 
@@ -182,11 +202,31 @@ export function KuvantaminenPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex flex-col items-end gap-2">
                       <Badge className={getStatusColor(study.status)}>
                         {getStatusText(study.status)}
                       </Badge>
-                      <p className="text-sm text-gray-500 mt-1">{study.orderedByName}</p>
+                      <p className="text-sm text-gray-500">{study.orderedByName}</p>
+                      <div className="flex gap-2 mt-2">
+                        {study.status === 'ordered' && !user?.isPatient && (
+                          <Button 
+                            onClick={() => handleScheduleStudy(study.id)}
+                            size="sm" 
+                            className="bg-orange-500 hover:bg-orange-600 text-white"
+                          >
+                            <Scan className="w-3 h-3 mr-1" />
+                            Aikatauluta
+                          </Button>
+                        )}
+                        <Button 
+                          onClick={() => handleOpenReport(study)}
+                          size="sm" 
+                          variant="outline"
+                        >
+                          <FileText className="w-3 h-3 mr-1" />
+                          {study.report ? 'Katsele lausuntoa' : 'Lisää lausunto'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

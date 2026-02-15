@@ -35,6 +35,7 @@ import { SidebarCustomizerPage } from '@/sections/SidebarCustomizerPage';
 import { FeatureSuggestionsPage } from '@/sections/FeatureSuggestionsPage';
 import { PalautteetPage } from '@/sections/PalautteetPage';
 import { ViestitPage } from '@/sections/ViestitPage';
+import { PatientStaffDirectoryPage } from '@/sections/PatientStaffDirectoryPage';
 import { Toaster } from '@/components/ui/sonner';
 
 function AppContent() {
@@ -56,6 +57,7 @@ function AppContent() {
             {patientTab === 'overview' && <PotilasKantaPage />}
             {patientTab === 'appointments' && <PotilasAjanvarausPage />}
             {patientTab === 'feedback' && <PotilasPalautePage />}
+            {patientTab === 'staff' && <PatientStaffDirectoryPage />}
             {patientTab === 'messages' && <ViestitPage />}
           </div>
         </main>

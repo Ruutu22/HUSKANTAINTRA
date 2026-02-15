@@ -119,6 +119,7 @@ const navGroups: NavGroup[] = [
       { id: 'kayttajat', label: 'Käyttäjähallinta', icon: Users },
       { id: 'henkilokunnan-tunnukset', label: 'Henkilökunnan tunnukset', icon: Users },
       { id: 'ryhmat', label: 'Käyttäjäryhmät', icon: UserCog },
+      { id: 'laakkeet', label: 'Lääkkeet', icon: Pill },
     ]
   },
   {

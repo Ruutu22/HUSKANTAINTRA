@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { usePatients, useUsers, useAuditLogs } from '@/hooks/useStorage';
+import { usePatients, useUsers, useAuditLogs, useMessages } from '@/hooks/useStorage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,67 +22,19 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 
-interface Message {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  senderName: string;
-  senderType: 'staff' | 'patient';
-  content: string;
-  sentAt: Date;
-  isRead: boolean;
-  readAt?: Date;
-}
-
-interface Conversation {
-  id: string;
-  participantId: string;
-  participantName: string;
-  participantType: 'staff' | 'patient';
-  lastMessage?: string;
-  lastMessageAt?: Date;
-  unreadCount: number;
-}
-
 export function ViestitPage() {
   const { user } = useAuth();
   const { patients } = usePatients();
   const { users } = useUsers();
   const { addLog } = useAuditLogs();
+  const { messages, conversations, createConversation, sendMessage, markAsRead } = useMessages();
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewConversationOpen, setIsNewConversationOpen] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Load conversations and messages from localStorage
-  useEffect(() => {
-    const loadData = () => {
-      const storedConversations = localStorage.getItem('hus_conversations');
-      const storedMessages = localStorage.getItem('hus_messages');
-      
-      if (storedConversations) {
-        const parsed = JSON.parse(storedConversations);
-        // Filter conversations where current user is a participant
-        const userConversations = parsed.filter((c: Conversation) => 
-          c.participantId === user?.id || c.id.includes(user?.id || '')
-        );
-        setConversations(userConversations);
-      }
-      
-      if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
-      }
-    };
-    
-    loadData();
-    const interval = setInterval(loadData, 3000); // Refresh every 3 seconds
-    return () => clearInterval(interval);
-  }, [user]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -94,17 +46,25 @@ export function ViestitPage() {
     if (!activeConversation) return [];
     return messages
       .filter(m => m.conversationId === activeConversation)
-      .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  };
+
+  // Get conversations for current user
+  const getUserConversations = () => {
+    if (!user) return [];
+    return conversations.filter(c => 
+      c.participantIds.includes(user.id)
+    );
   };
 
   // Get active conversation details
   const getActiveConversationDetails = () => {
-    return conversations.find(c => c.id === activeConversation);
+    return getUserConversations().find(c => c.id === activeConversation);
   };
 
   // Filter conversations
-  const filteredConversations = conversations.filter(c =>
-    c.participantName.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredConversations = getUserConversations().filter(c =>
+    c.participantNames.some(name => name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // Get available participants (patients for staff, staff for patients)
@@ -130,30 +90,12 @@ export function ViestitPage() {
   const handleStartConversation = () => {
     if (!selectedParticipant || !user) return;
 
-    const conversationId = `${user.id}_${selectedParticipant.id}`;
-    
-    // Check if conversation already exists
-    const existing = conversations.find(c => c.id === conversationId);
-    if (existing) {
-      setActiveConversation(conversationId);
-      setIsNewConversationOpen(false);
-      setSelectedParticipant(null);
-      return;
-    }
-
-    const newConversation: Conversation = {
-      id: conversationId,
-      participantId: selectedParticipant.id,
-      participantName: selectedParticipant.firstName 
+    const conversationId = createConversation(
+      [user.id, selectedParticipant.id],
+      [user.name, selectedParticipant.firstName 
         ? `${selectedParticipant.firstName} ${selectedParticipant.lastName}`
-        : selectedParticipant.name,
-      participantType: user.isPatient ? 'staff' : 'patient',
-      unreadCount: 0,
-    };
-
-    const updatedConversations = [newConversation, ...conversations];
-    setConversations(updatedConversations);
-    localStorage.setItem('hus_conversations', JSON.stringify(updatedConversations));
+        : selectedParticipant.name]
+    );
     
     setActiveConversation(conversationId);
     setIsNewConversationOpen(false);
@@ -165,33 +107,15 @@ export function ViestitPage() {
   const handleSendMessage = () => {
     if (!newMessage.trim() || !activeConversation || !user) return;
 
-    const message: Message = {
-      id: Math.random().toString(36).substr(2, 9),
+    sendMessage({
       conversationId: activeConversation,
       senderId: user.id,
       senderName: user.name || 'Käyttäjä',
-      senderType: user.isPatient ? 'patient' : 'staff',
+      senderRole: user.isPatient ? 'patient' : 'staff',
+      recipientId: '', // Will be set by hook
+      recipientName: '', // Will be set by hook
       content: newMessage.trim(),
-      sentAt: new Date(),
-      isRead: false,
-    };
-
-    const updatedMessages = [...messages, message];
-    setMessages(updatedMessages);
-    localStorage.setItem('hus_messages', JSON.stringify(updatedMessages));
-
-    // Update conversation last message
-    const updatedConversations = conversations.map(c => 
-      c.id === activeConversation 
-        ? { 
-            ...c, 
-            lastMessage: newMessage.trim(),
-            lastMessageAt: new Date()
-          }
-        : c
-    );
-    setConversations(updatedConversations);
-    localStorage.setItem('hus_conversations', JSON.stringify(updatedConversations));
+    });
 
     // Add audit log
     addLog({
@@ -200,32 +124,21 @@ export function ViestitPage() {
       userRole: user.role,
       action: 'chat_message',
       targetName: 'Yksityisviesti',
-      details: `Viesti lähetetty keskusteluun ${activeConversation}`,
+      details: `Viesti lähetetty`,
     });
 
     setNewMessage('');
-  };
-
-  const markAsRead = (conversationId: string) => {
-    const updatedMessages = messages.map(m => 
-      m.conversationId === conversationId && m.senderId !== user?.id && !m.isRead
-        ? { ...m, isRead: true, readAt: new Date() }
-        : m
-    );
-    setMessages(updatedMessages);
-    localStorage.setItem('hus_messages', JSON.stringify(updatedMessages));
-
-    // Update unread count
-    const updatedConversations = conversations.map(c => 
-      c.id === conversationId ? { ...c, unreadCount: 0 } : c
-    );
-    setConversations(updatedConversations);
-    localStorage.setItem('hus_conversations', JSON.stringify(updatedConversations));
+    toast.success('Viesti lähetetty');
   };
 
   const handleSelectConversation = (conversationId: string) => {
     setActiveConversation(conversationId);
-    markAsRead(conversationId);
+    // Mark all messages in conversation as read
+    getConversationMessages().forEach(m => {
+      if (!m.isRead && m.recipientId === user?.id) {
+        markAsRead(m.id);
+      }
+    });
   };
 
   const conversationMessages = getConversationMessages();
@@ -292,10 +205,22 @@ export function ViestitPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <p className="font-medium truncate">{conversation.participantName}</p>
-                            {conversation.unreadCount > 0 && (
+                            <p className="font-medium truncate">
+                              {conversation.participantNames
+                                .filter(name => name !== user?.name)
+                                .join(', ')}
+                            </p>
+                            {messages.filter(m => 
+                              m.conversationId === conversation.id && 
+                              !m.isRead && 
+                              m.recipientId === user?.id
+                            ).length > 0 && (
                               <Badge className="bg-red-500 text-white text-xs">
-                                {conversation.unreadCount}
+                                {messages.filter(m => 
+                                  m.conversationId === conversation.id && 
+                                  !m.isRead && 
+                                  m.recipientId === user?.id
+                                ).length}
                               </Badge>
                             )}
                           </div>
@@ -328,9 +253,13 @@ export function ViestitPage() {
                     <User className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="font-medium">{activeConversationDetails?.participantName}</p>
+                    <p className="font-medium">
+                      {activeConversationDetails?.participantNames
+                        .filter(name => name !== user?.name)
+                        .join(', ')}
+                    </p>
                     <p className="text-xs text-gray-500">
-                      {activeConversationDetails?.participantType === 'staff' ? 'Henkilökunta' : 'Potilas'}
+                      {conversationMessages.length} viestiä
                     </p>
                   </div>
                 </div>
@@ -368,7 +297,7 @@ export function ViestitPage() {
                               isOwn ? 'text-blue-100' : 'text-gray-500'
                             }`}>
                               <Clock className="w-3 h-3" />
-                              {format(new Date(message.sentAt), 'HH:mm', { locale: fi })}
+                              {format(new Date(message.createdAt), 'HH:mm', { locale: fi })}
                               {isOwn && (
                                 message.isRead ? (
                                   <CheckCheck className="w-3 h-3 ml-1" />

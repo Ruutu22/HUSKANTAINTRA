@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppointments, usePatients, useAuditLogs } from '@/hooks/useStorage';
+import { useAppointments, usePatients, useAuditLogs, useNotifications } from '@/hooks/useStorage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,7 @@ export function AjanvarausPage() {
   const { appointments, createAppointment, cancelAppointment, getTodayAppointments, getAppointmentsByDoctor } = useAppointments();
   const { patients, searchPatients } = usePatients();
   const { addLog } = useAuditLogs();
+  const { sendNotification } = useNotifications();
 
   const [activeTab, setActiveTab] = useState('calendar');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
@@ -93,7 +94,25 @@ export function AjanvarausPage() {
   const handleCancel = (appointmentId: string) => {
     if (!confirm('Haluatko varmasti peruuttaa tämän ajan?')) return;
     
+    const appointment = appointments.find(a => a.id === appointmentId);
     cancelAppointment(appointmentId);
+    
+    // Send notification to the doctor if patient cancelled, or to patient if doctor cancelled
+    if (appointment && user) {
+      const isPatientCancelling = user?.isPatient;
+      const recipientId = isPatientCancelling ? appointment.doctorId : appointment.patientId;
+      
+      sendNotification({
+        title: `Ajanvaraus peruutettu`,
+        message: isPatientCancelling 
+          ? `Potilas ${appointment.patientName} perui ajan ${format(new Date(appointment.date), 'dd.MM.yyyy HH:mm')}`
+          : `Lääkäri ${appointment.doctorName} perui ajan ${format(new Date(appointment.date), 'dd.MM.yyyy HH:mm')}`,
+        sentBy: user.id,
+        sentByName: user.name,
+        targetUsers: [recipientId],
+        priority: 'normal',
+      });
+    }
     
     addLog({
       userId: user!.id,

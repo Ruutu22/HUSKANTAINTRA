@@ -1,5 +1,27 @@
 import html2pdf from 'html2pdf.js';
 
+function addWatermark(element: HTMLElement): HTMLElement {
+  // Create wrapper with watermark
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'relative';
+  wrapper.style.width = '100%';
+  
+  // Add watermark text overlay
+  const watermark = document.createElement('div');
+  watermark.innerHTML = '.ruutu HUS';
+  watermark.style.position = 'absolute';
+  watermark.style.bottom = '20mm';
+  watermark.style.right = '20mm';
+  watermark.style.fontSize = '12px';
+  watermark.style.color = '#999';
+  watermark.style.fontFamily = 'Arial, sans-serif';
+  watermark.style.zIndex = '1';
+  
+  wrapper.appendChild(element.cloneNode(true));
+  wrapper.appendChild(watermark);
+  return wrapper;
+}
+
 /**
  * Convert HTML form content to PDF and return as data URL
  * @param htmlContent The HTML content to convert
@@ -14,6 +36,7 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
       
       const element = document.createElement('div');
       element.innerHTML = sanitizedHtml;
+      const elementWithWatermark = addWatermark(element);
       
       const opt = {
         margin: 10,
@@ -24,7 +47,7 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      html2pdf().set(opt).from(element).toPdf().output('dataurlstring').then((pdfAsString: string) => {
+      html2pdf().set(opt).from(elementWithWatermark).toPdf().output('dataurlstring').then((pdfAsString: string) => {
         resolve(pdfAsString);
       });
     } catch (error) {
@@ -67,6 +90,7 @@ export async function convertHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
       
       const element = document.createElement('div');
       element.innerHTML = sanitizedHtml;
+      const elementWithWatermark = addWatermark(element);
       
       const opt = {
         margin: 10,
@@ -76,7 +100,7 @@ export async function convertHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      html2pdf().set(opt).from(element).toPdf().output('blob').then((pdf: Blob) => {
+      html2pdf().set(opt).from(elementWithWatermark).toPdf().output('blob').then((pdf: Blob) => {
         resolve(pdf);
       });
     } catch (error) {
