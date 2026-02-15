@@ -20,7 +20,7 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
         filename: filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+        jsPDF: { orientation: 'portrait' as const, unit: 'mm' as const, format: 'a4' as const },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
@@ -72,7 +72,7 @@ export async function convertHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
         margin: 10,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
+        jsPDF: { orientation: 'portrait' as const, unit: 'mm' as const, format: 'a4' as const },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
