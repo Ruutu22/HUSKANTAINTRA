@@ -18,7 +18,7 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
       const opt = {
         margin: 10,
         filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
@@ -70,7 +70,7 @@ export async function convertHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
       
       const opt = {
         margin: 10,
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
