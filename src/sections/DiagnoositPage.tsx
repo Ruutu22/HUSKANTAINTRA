@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Search, 
   Plus, 
@@ -20,8 +21,11 @@ import {
   Trash2, 
   BookOpen,
   ChevronRight,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
+import { isCriticalDiagnosis } from '@/data/criticalDiagnoses';
+import { DiagnosisApproval } from '@/components/DiagnosisApproval';
 
 export function DiagnoositPage() {
   const { user, isJYL } = useAuth();
@@ -60,8 +64,13 @@ export function DiagnoositPage() {
     ? getSpecificDiagnosesByCategory(selectedCategoryId)
     : [];
 
-  // Filter diagnoses
+  // Filter diagnoses - if patient is viewing, only show their own
   const filteredDiagnoses = diagnoses.filter(d => {
+    // If patient is logged in, only show their diagnoses
+    if (user?.isPatient) {
+      if (d.patientId !== user.patientId) return false;
+    }
+    
     const matchesSearch = 
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -104,8 +113,21 @@ export function DiagnoositPage() {
   const handleAddDiagnosis = () => {
     if (!user || !newDiagnosis.patientId || !newDiagnosis.name) return;
     
+    // Check if diagnosis is critical
+    const { isCritical, severity } = isCriticalDiagnosis(newDiagnosis.code, newDiagnosis.name);
+    
+    // If critical, show warning and require JYL approval
+    if (isCritical && user.role !== 'JYL') {
+      alert(`VAROITUS: Tämä on kriittinen diagnoosi (${severity}). Vain johtava ylilääkäri voi tallentaa tämän diagnoosin.`);
+      return;
+    }
+    
+    // Add diagnosis with critical status
     addDiagnosis({
       ...newDiagnosis,
+      isCritical,
+      approvalRequired: isCritical,
+      status: isCritical ? 'pending' : 'approved',
       diagnosedBy: user.id,
       diagnosedByName: user.name,
     });
@@ -116,7 +138,7 @@ export function DiagnoositPage() {
       userRole: user.role,
       action: 'create_diagnosis',
       targetName: newDiagnosis.name,
-      details: `Diagnoosi ${newDiagnosis.code} lisätty potilaalle`,
+      details: `Diagnoosi ${newDiagnosis.code} lisätty potilaalle${isCritical ? ' (KRIITTINEN - Odottaa hyväksyntää)' : ''}`,
     });
 
     // Reset form
@@ -220,68 +242,104 @@ export function DiagnoositPage() {
               </SelectContent>
             </Select>
           </div>
-
           {/* Diagnoses List */}
           <div className="grid gap-4">
-            {filteredDiagnoses.map((diagnosis) => (
-              <Card key={diagnosis.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => viewDiagnosisDetails(diagnosis)}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-full bg-[#0066b3] flex items-center justify-center text-white">
-                        <Stethoscope className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">{diagnosis.name}</h3>
-                          <Badge variant="outline">{diagnosis.code}</Badge>
-                          {diagnosis.isPrimary && (
-                            <Badge className="bg-blue-100 text-blue-800">Ensisijainen</Badge>
+            {filteredDiagnoses.map((diagnosis) => {
+              const criticalStatus = isCriticalDiagnosis(diagnosis.code, diagnosis.name);
+              return (
+                <Card key={diagnosis.id} className={`hover:shadow-md transition-shadow cursor-pointer ${criticalStatus.isCritical ? 'border-2 border-red-300' : ''}`} onClick={() => viewDiagnosisDetails(diagnosis)}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${criticalStatus.isCritical ? 'bg-red-600' : 'bg-[#0066b3]'}`}>
+                          <Stethoscope className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-lg">{diagnosis.name}</h3>
+                            <Badge variant="outline">{diagnosis.code}</Badge>
+                            {criticalStatus.isCritical && (
+                              <Badge className="bg-red-100 text-red-800 border border-red-300">
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                KRIITTINEN
+                              </Badge>
+                            )}
+                            {diagnosis.isPrimary && (
+                              <Badge className="bg-blue-100 text-blue-800">Ensisijainen</Badge>
+                            )}
+                            {diagnosis.isChronic && (
+                              <Badge className="bg-orange-100 text-orange-800">Krooninen</Badge>
+                            )}
+                            {diagnosis.status === 'pending' && (
+                              <Badge className="bg-yellow-100 text-yellow-800">Odottaa hyväksyntää</Badge>
+                            )}
+                            {diagnosis.status === 'approved' && (
+                              <Badge className="bg-green-100 text-green-800">Hyväksytty</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            <User className="w-3 h-3 inline mr-1" />
+                            {getPatientName(diagnosis.patientId)}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            <Calendar className="w-3 h-3 inline mr-1" />
+                            {new Date(diagnosis.diagnosedAt).toLocaleDateString('fi-FI')} - {diagnosis.diagnosedByName}
+                          </p>
+                          <p className="text-sm text-gray-400 mt-1">
+                            <BookOpen className="w-3 h-3 inline mr-1" />
+                            {getCategoryName(diagnosis.categoryId)}
+                          </p>
+                          {diagnosis.description && (
+                            <p className="text-sm text-gray-600 mt-2">{diagnosis.description}</p>
                           )}
-                          {diagnosis.isChronic && (
-                            <Badge className="bg-orange-100 text-orange-800">Krooninen</Badge>
+                          {diagnosis.notes && (
+                            <p className="text-sm text-gray-500 mt-1 italic">{diagnosis.notes}</p>
+                          )}
+                          {criticalStatus.isCritical && diagnosis.approvalRequired && (
+                            <Alert className="mt-3 bg-orange-50 border-orange-200">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription className="text-orange-700 text-sm">
+                                Vaatii johtavan ylilääkärin hyväksynnän
+                              </AlertDescription>
+                            </Alert>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
-                          <User className="w-3 h-3 inline mr-1" />
-                          {getPatientName(diagnosis.patientId)}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          <Calendar className="w-3 h-3 inline mr-1" />
-                          {new Date(diagnosis.diagnosedAt).toLocaleDateString('fi-FI')} - {diagnosis.diagnosedByName}
-                        </p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          <BookOpen className="w-3 h-3 inline mr-1" />
-                          {getCategoryName(diagnosis.categoryId)}
-                        </p>
-                        {diagnosis.description && (
-                          <p className="text-sm text-gray-600 mt-2">{diagnosis.description}</p>
-                        )}
-                        {diagnosis.notes && (
-                          <p className="text-sm text-gray-500 mt-1 italic">{diagnosis.notes}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {criticalStatus.isCritical && <DiagnosisApproval diagnosis={{
+                          id: diagnosis.id,
+                          name: diagnosis.name,
+                          code: diagnosis.code,
+                          patientId: diagnosis.patientId,
+                          patientName: getPatientName(diagnosis.patientId),
+                          severity: criticalStatus.severity,
+                          diagnosedByName: diagnosis.diagnosedByName,
+                          diagnosedAt: diagnosis.diagnosedAt,
+                          status: diagnosis.status as 'pending' | 'approved' | 'rejected',
+                          approvedBy: diagnosis.approvedBy,
+                          approvedAt: diagnosis.approvedAt,
+                          notes: diagnosis.notes,
+                        }} currentUserRole={user?.role} />}
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        {(isJYL || diagnosis.diagnosedBy === user?.id) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteDiagnosis(diagnosis.id);
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                      {(isJYL || diagnosis.diagnosedBy === user?.id) && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteDiagnosis(diagnosis.id);
-                          }}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
             {filteredDiagnoses.length === 0 && (
               <Card className="border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-12">

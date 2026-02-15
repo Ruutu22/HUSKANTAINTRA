@@ -167,7 +167,7 @@ export function LahetteetPage() {
 
         <TabsContent value="pending">
           <div className="space-y-3">
-            {pendingReferrals.map((referral) => (
+            {pendingReferrals.filter(r => user?.isPatient ? r.patientId === user.patientId : true).map((referral) => (
               <Card key={referral.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -219,7 +219,7 @@ export function LahetteetPage() {
 
         <TabsContent value="history">
           <div className="space-y-3">
-            {referrals.filter(r => r.status === 'completed').map((referral) => (
+            {referrals.filter(r => r.status === 'completed').filter(r => user?.isPatient ? r.patientId === user.patientId : true).map((referral) => (
               <Card key={referral.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">

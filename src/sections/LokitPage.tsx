@@ -38,6 +38,7 @@ const ACTION_LABELS: Record<LogAction, string> = {
   create_note: 'Muistion luonti',
   update_note: 'Muistion päivitys',
   approve_request: 'Hyväksyntä',
+  patient_account_created: 'Potilaan tunnuksien luonti',
 };
 
 const ACTION_COLORS: Record<LogAction, string> = {
@@ -64,6 +65,7 @@ const ACTION_COLORS: Record<LogAction, string> = {
   create_note: 'bg-yellow-100 text-yellow-800',
   update_note: 'bg-yellow-100 text-yellow-800',
   approve_request: 'bg-green-100 text-green-800',
+  patient_account_created: 'bg-green-100 text-green-800',
 };
 
 export function LokitPage() {

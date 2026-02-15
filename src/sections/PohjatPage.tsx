@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
+import { convertHtmlToPdfBlob } from '@/lib/pdfConverter';
 import { 
   FileText, 
   Plus, 
@@ -233,8 +233,26 @@ export function PohjatPage() {
     setImages(images.filter(img => img.id !== imageId));
   };
 
-  const handleCreateTemplate = () => {
+  const handleCreateTemplate = async () => {
     if (newTemplateName.trim()) {
+      let pdfContent: string | undefined;
+      
+      // Konvertoi HTML:n PDF:ksi jos HTML-siskällöt on
+      if (activeTab === 'html' && htmlContent) {
+        try {
+          const pdfBlob = await convertHtmlToPdfBlob(htmlContent);
+          pdfContent = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(pdfBlob);
+          });
+        } catch (error) {
+          console.error('PDF conversion failed:', error);
+          // Fallback - tallenna tyhjä jos PDF konversio epäonnistui
+          pdfContent = undefined;
+        }
+      }
+      
       addTemplate({
         name: newTemplateName.trim(),
         description: newTemplateDesc.trim(),
@@ -244,7 +262,7 @@ export function PohjatPage() {
           fields: fields.sort((a, b) => (a.order || 0) - (b.order || 0)),
         }],
         createdBy: user?.name || 'JYL',
-        html: activeTab === 'html' ? htmlContent : undefined,
+        html: pdfContent, // Tallenna PDF-data URL HTML-kenttään
         images,
         category: selectedCategory,
         allowedRoles: allowedRoles.length > 0 ? allowedRoles : undefined,
@@ -271,8 +289,25 @@ export function PohjatPage() {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editingTemplate) {
+      let pdfContent: string | undefined;
+      
+      // Konvertoi HTML:n PDF:ksi jos HTML-sisällöt on
+      if (activeTab === 'html' && htmlContent) {
+        try {
+          const pdfBlob = await convertHtmlToPdfBlob(htmlContent);
+          pdfContent = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(pdfBlob);
+          });
+        } catch (error) {
+          console.error('PDF conversion failed:', error);
+          pdfContent = undefined;
+        }
+      }
+      
       updateTemplate(editingTemplate, {
         name: newTemplateName,
         description: newTemplateDesc,
@@ -281,7 +316,7 @@ export function PohjatPage() {
           title: 'Pääosio',
           fields: fields.sort((a, b) => (a.order || 0) - (b.order || 0)),
         }],
-        html: activeTab === 'html' ? htmlContent : undefined,
+        html: pdfContent, // Tallenna PDF-data URL HTML-kenttään
         images,
         category: selectedCategory,
         allowedRoles: allowedRoles.length > 0 ? allowedRoles : undefined,
@@ -707,58 +742,91 @@ export function PohjatPage() {
             </div>
 
             {/* Right side - Preview */}
-            <div className="border rounded-lg bg-gray-50 p-4">
+            <div className="border rounded-lg bg-gray-50 p-4 space-y-4">
               <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
                 <Move className="w-4 h-4" />
                 Esikatselu (vedä kuvia)
               </Label>
-              <div 
-                ref={previewRef}
-                className="relative bg-white border-2 border-dashed border-gray-300 rounded-lg min-h-[500px] overflow-hidden"
-              >
-                {/* Template preview content */}
-                <div className="p-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{newTemplateName || 'Uusi lomake'}</h3>
-                  <p className="text-sm text-gray-500 mb-4">{newTemplateDesc}</p>
-                  
-                  {fields.sort((a, b) => (a.order || 0) - (b.order || 0)).map((field) => (
-                    <div key={field.id} className="mb-3">
-                      <Label className="text-sm">{field.label}</Label>
-                      {field.type === 'textarea' ? (
-                        <div className="h-20 border rounded bg-gray-50 mt-1" />
-                      ) : field.type === 'checkbox' ? (
-                        <div className="flex gap-2 mt-1">
-                          <div className="w-4 h-4 border rounded" />
-                          <span className="text-sm text-gray-400">Vaihtoehto</span>
-                        </div>
-                      ) : field.type === 'approval' ? (
-                        <Button size="sm" className="mt-1 bg-green-600 hover:bg-green-700">
-                          <CheckCircle2 className="w-4 h-4 mr-1" />
-                          Hyväksy
-                        </Button>
-                      ) : field.type === 'reject' ? (
-                        <Button size="sm" variant="destructive" className="mt-1">
-                          <XCircle className="w-4 h-4 mr-1" />
-                          Hylkää
-                        </Button>
-                      ) : (
-                        <div className="h-8 border rounded bg-gray-50 mt-1" />
-                      )}
-                    </div>
+              
+              {/* HTML Preview when HTML tab is active */}
+              {activeTab === 'html' && htmlContent && (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className="bg-gradient-to-r from-gray-800 to-gray-700 px-4 py-2 text-white text-xs font-mono flex items-center justify-between">
+                    <span>HTML-esikatselu</span>
+                    <code className="text-gray-300">Live Preview</code>
+                  </div>
+                  <div className="p-4 h-96 overflow-auto bg-white">
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      className="prose prose-sm max-w-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* HTML Code Display when HTML tab is active */}
+              {activeTab === 'html' && htmlContent && (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-800 to-blue-700 px-4 py-2 text-white text-xs font-mono flex items-center justify-between">
+                    <span>HTML-koodi</span>
+                    <code className="text-blue-300">Source Code</code>
+                  </div>
+                  <pre className="p-4 h-64 overflow-auto bg-gray-900 text-gray-100 text-xs font-mono rounded-b-lg">
+                    <code>{htmlContent}</code>
+                  </pre>
+                </div>
+              )}
+
+              {/* Visual Preview when visual tab is active */}
+              {activeTab === 'visual' && (
+                <div 
+                  ref={previewRef}
+                  className="relative bg-white border-2 border-dashed border-gray-300 rounded-lg min-h-[500px] overflow-hidden"
+                >
+                  {/* Template preview content */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{newTemplateName || 'Uusi lomake'}</h3>
+                    <p className="text-sm text-gray-500 mb-4">{newTemplateDesc}</p>
+                    
+                    {fields.sort((a, b) => (a.order || 0) - (b.order || 0)).map((field) => (
+                      <div key={field.id} className="mb-3">
+                        <Label className="text-sm">{field.label}</Label>
+                        {field.type === 'textarea' ? (
+                          <div className="h-20 border rounded bg-gray-50 mt-1" />
+                        ) : field.type === 'checkbox' ? (
+                          <div className="flex gap-2 mt-1">
+                            <div className="w-4 h-4 border rounded" />
+                            <span className="text-sm text-gray-400">Vaihtoehto</span>
+                          </div>
+                        ) : field.type === 'approval' ? (
+                          <Button size="sm" className="mt-1 bg-green-600 hover:bg-green-700">
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Hyväksy
+                          </Button>
+                        ) : field.type === 'reject' ? (
+                          <Button size="sm" variant="destructive" className="mt-1">
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Hylkää
+                          </Button>
+                        ) : (
+                          <div className="h-8 border rounded bg-gray-50 mt-1" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Draggable images */}
+                  {images.map((image) => (
+                    <DraggableImage
+                      key={image.id}
+                      image={image}
+                      onUpdate={handleUpdateImage}
+                      onRemove={handleRemoveImage}
+                      containerRef={previewRef}
+                    />
                   ))}
                 </div>
-
-                {/* Draggable images */}
-                {images.map((image) => (
-                  <DraggableImage
-                    key={image.id}
-                    image={image}
-                    onUpdate={handleUpdateImage}
-                    onRemove={handleRemoveImage}
-                    containerRef={previewRef}
-                  />
-                ))}
-              </div>
+              )}
             </div>
           </div>
 

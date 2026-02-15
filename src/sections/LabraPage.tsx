@@ -206,7 +206,7 @@ export function LabraPage() {
 
         <TabsContent value="pending">
           <div className="space-y-3">
-            {pendingOrders.map((order) => (
+            {pendingOrders.filter(o => user?.isPatient ? o.patientId === user.patientId : true).map((order) => (
               <Card key={order.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -254,7 +254,7 @@ export function LabraPage() {
 
         <TabsContent value="history">
           <div className="space-y-3">
-            {orders.filter(o => o.status === 'completed').map((order) => (
+            {orders.filter(o => o.status === 'completed').filter(o => user?.isPatient ? o.patientId === user.patientId : true).map((order) => (
               <Card key={order.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">

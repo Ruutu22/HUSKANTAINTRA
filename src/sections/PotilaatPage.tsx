@@ -471,6 +471,35 @@ export function PotilaatPage() {
                   onChange={(e) => setSelectedPatient({ ...selectedPatient, address: e.target.value })}
                 />
               </div>
+              <div className="col-span-2 space-y-2">
+                <Label>Allergiat (pilkulla erotettu)</Label>
+                <Input
+                  value={(selectedPatient.allergies || []).join(', ')}
+                  onChange={(e) => setSelectedPatient({ 
+                    ...selectedPatient, 
+                    allergies: e.target.value.split(',').map(a => a.trim()).filter(a => a.length > 0)
+                  })}
+                  placeholder="Esim. Penisillini, Ibuprofeeni, Pähkinät"
+                />
+                {selectedPatient.allergies && selectedPatient.allergies.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedPatient.allergies.map((allergy, idx) => (
+                      <Badge key={idx} variant="secondary" className="bg-red-100 text-red-700 flex items-center gap-1">
+                        {allergy}
+                        <button
+                          onClick={() => setSelectedPatient({
+                            ...selectedPatient,
+                            allergies: selectedPatient.allergies?.filter((_, i) => i !== idx)
+                          })}
+                          className="ml-1 hover:text-red-900"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter>

@@ -48,11 +48,14 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [isRequestConfidentialOpen, setIsRequestConfidentialOpen] = useState(false);
+  const [isPasswordProtectionOpen, setIsPasswordProtectionOpen] = useState(false);
   const [editPassword, setEditPassword] = useState('');
   const [editError, setEditError] = useState('');
   const [newName, setNewName] = useState('');
   const [visibleToUsers, setVisibleToUsers] = useState<string[]>([]);
   const [rejectionReason] = useState('');
+  const [confidentialPassword, setConfidentialPassword] = useState('');
+  const [confidentialPasswordError, setConfidentialPasswordError] = useState('');
 
   const filteredForms = searchForms(searchQuery).filter(form => {
     if (activeTab === 'confidential') return form.isConfidential;
@@ -64,8 +67,35 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
   const pendingApprovals = getPendingRequests();
 
   const handleView = (formId: string) => {
-    setSelectedForm(formId);
-    setIsViewDialogOpen(true);
+    const form = getFormById(formId);
+    if (form?.isConfidential) {
+      // Require password for confidential documents
+      setSelectedForm(formId);
+      setIsPasswordProtectionOpen(true);
+      setConfidentialPassword('');
+      setConfidentialPasswordError('');
+    } else {
+      setSelectedForm(formId);
+      setIsViewDialogOpen(true);
+    }
+  };
+
+  const handleConfidentialPasswordSubmit = () => {
+    if (!confidentialPassword) {
+      setConfidentialPasswordError('Syötä salasana');
+      return;
+    }
+    
+    // Check password against user's edit password (should match to view confidential)
+    // For now, we'll use a simplified check - in production, this would verify against user's actual password
+    if (confidentialPassword === 'confidential') {
+      setIsPasswordProtectionOpen(false);
+      setSelectedForm(selectedForm);
+      setIsViewDialogOpen(true);
+      setConfidentialPassword('');
+    } else {
+      setConfidentialPasswordError('Väärä salasana');
+    }
   };
 
   const handleEditClick = (formId: string) => {
@@ -542,6 +572,45 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
             </Button>
             <Button onClick={confirmRename}>
               Tallenna
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Protection Dialog for Confidential Documents */}
+      <Dialog open={isPasswordProtectionOpen} onOpenChange={setIsPasswordProtectionOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Salassapidettävä dokumentti</DialogTitle>
+            <DialogDescription>
+              Tämä dokumentti on merkitty salassapidettäväksi. Syötä salasanasi nähdäksesi sen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="confidentialPassword">Salasana</Label>
+              <Input
+                id="confidentialPassword"
+                type="password"
+                placeholder="Syötä salasanasi"
+                value={confidentialPassword}
+                onChange={(e) => {
+                  setConfidentialPassword(e.target.value);
+                  setConfidentialPasswordError('');
+                }}
+                onKeyPress={(e) => e.key === 'Enter' && handleConfidentialPasswordSubmit()}
+              />
+              {confidentialPasswordError && (
+                <p className="text-sm text-red-500 mt-2">{confidentialPasswordError}</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPasswordProtectionOpen(false)}>
+              Peruuta
+            </Button>
+            <Button onClick={handleConfidentialPasswordSubmit}>
+              Jatka
             </Button>
           </DialogFooter>
         </DialogContent>

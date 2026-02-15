@@ -20,19 +20,21 @@ import {
   Check,
   Briefcase,
   Save,
-  X
+  Pencil,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export function KayttajatPage() {
   const { jobTitles, addJobTitle, deleteJobTitle } = useJobTitles();
-  const { accounts: patientAccounts, createAccount: createPatientAccount, deleteAccount: deletePatientAccount } = usePatientAccounts();
+  const { accounts: patientAccounts, createAccount: createPatientAccount, deleteAccount: deletePatientAccount, updateAccount: updatePatientAccount } = usePatientAccounts();
   const { patients } = usePatients();
   const { isJYL } = useAuth();
   
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJobDialog, setShowJobDialog] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [editingPatientAccountId, setEditingPatientAccountId] = useState<string | null>(null);
 
   // Patient form
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -76,6 +78,42 @@ export function KayttajatPage() {
     return result;
   };
 
+  const resetPatientForm = () => {
+    setSelectedPatientId('');
+    setUsername('');
+    setPassword('');
+    setExpiryMonths('12');
+    setPermissions({
+      canViewRecords: true,
+      canViewPrescriptions: true,
+      canViewLabResults: true,
+      canViewAppointments: true,
+      canSendMessages: true,
+      canSubmitFeedback: true,
+    });
+    setEditingPatientAccountId(null);
+  };
+
+  const openEditPatientDialog = (account: any) => {
+    setEditingPatientAccountId(account.id);
+    setSelectedPatientId(account.patientId);
+    setUsername(account.username);
+    setPassword(account.password);
+    setPermissions(account);
+    
+    // Calculate expiry months
+    if (account.expiresAt) {
+      const expiryDate = new Date(account.expiresAt);
+      const now = new Date();
+      const diffMs = expiryDate.getTime() - now.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const months = Math.floor(diffDays / 30);
+      setExpiryMonths(String(months > 0 ? months : 1));
+    }
+    
+    setShowCreateDialog(true);
+  };
+
   const handleCreate = () => {
     if (!selectedPatientId || !username.trim() || !password.trim()) {
       toast.error('Täytä kaikki pakolliset kentät');
@@ -87,21 +125,32 @@ export function KayttajatPage() {
     expiresAt.setMonth(expiresAt.getMonth() + months);
 
     try {
-      createPatientAccount({
-        patientId: selectedPatientId,
-        username: username.trim(),
-        password: password.trim(),
-        isActive: true,
-        expiresAt,
-        ...permissions,
-      });
+      if (editingPatientAccountId) {
+        // Update existing account
+        updatePatientAccount(editingPatientAccountId, {
+          patientId: selectedPatientId,
+          username: username.trim(),
+          password: password.trim(),
+          isActive: true,
+          expiresAt,
+          ...permissions,
+        });
+        toast.success('Potilastunnus päivitetty onnistuneesti!');
+      } else {
+        // Create new account
+        createPatientAccount({
+          patientId: selectedPatientId,
+          username: username.trim(),
+          password: password.trim(),
+          isActive: true,
+          expiresAt,
+          ...permissions,
+        });
+        toast.success('Potilastunnus luotu onnistuneesti!');
+      }
 
-      toast.success('Potilastunnus luotu onnistuneesti!');
       setShowCreateDialog(false);
-      setSelectedPatientId('');
-      setUsername('');
-      setPassword('');
-      setExpiryMonths('12');
+      resetPatientForm();
     } catch (error) {
       toast.error('Virhe tunnuksen luonnissa: ' + (error as Error).message);
     }
@@ -231,19 +280,29 @@ export function KayttajatPage() {
                         </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm('Haluatko varmasti poistaa tämän potilastunnuksen?')) {
-                          deletePatientAccount(account.id);
-                          toast.success('Potilastunnus poistettu');
-                        }
-                      }}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditPatientDialog(account)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm('Haluatko varmasti poistaa tämän potilastunnuksen?')) {
+                            deletePatientAccount(account.id);
+                            toast.success('Potilastunnus poistettu');
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -297,11 +356,11 @@ export function KayttajatPage() {
 
       {/* Create Patient Account Dialog */}
       {showCreateDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateDialog(false); }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={(e) => { if (e.target === e.currentTarget) { setShowCreateDialog(false); resetPatientForm(); } }}>
           <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">Luo potilastunnus</h3>
-              <button onClick={() => setShowCreateDialog(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+              <h3 className="text-lg font-semibold">{editingPatientAccountId ? 'Muokkaa potilastunnusta' : 'Luo potilastunnus'}</h3>
+              <button onClick={() => { setShowCreateDialog(false); resetPatientForm(); }} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
             <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
               <div className="space-y-4">

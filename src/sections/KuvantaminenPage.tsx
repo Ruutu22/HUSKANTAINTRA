@@ -164,7 +164,7 @@ export function KuvantaminenPage() {
 
         <TabsContent value="pending">
           <div className="space-y-3">
-            {pendingStudies.map((study) => (
+            {pendingStudies.filter(s => user?.isPatient ? s.patientId === user.patientId : true).map((study) => (
               <Card key={study.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -205,7 +205,7 @@ export function KuvantaminenPage() {
 
         <TabsContent value="history">
           <div className="space-y-3">
-            {studies.filter(s => s.status === 'reported').map((study) => (
+            {studies.filter(s => s.status === 'reported').filter(s => user?.isPatient ? s.patientId === user.patientId : true).map((study) => (
               <Card key={study.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">

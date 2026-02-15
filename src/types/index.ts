@@ -256,6 +256,22 @@ export interface Patient {
   createdBy: string;
   notes?: string;
   allergies?: string[];
+  tags?: PatientTag[];
+  customTags?: CustomPatientTag[];
+}
+
+export interface PatientTag {
+  id: string;
+  name: string;
+  color: string; // hex color code
+  createdAt: Date;
+}
+
+export interface CustomPatientTag {
+  tagId: string;
+  patientId: string;
+  addedAt: Date;
+  addedBy: string;
 }
 
 // Hierarchical Diagnosis System
@@ -296,6 +312,11 @@ export interface Diagnosis {
   isPrimary: boolean;
   isChronic: boolean;
   notes?: string;
+  isCritical?: boolean; // Is this a critical diagnosis requiring approval
+  approvalRequired?: boolean; // Does it need supervisor approval
+  approvedBy?: string; // Supervisor who approved
+  approvedAt?: Date; // When it was approved
+  status?: 'pending' | 'approved' | 'rejected'; // Approval status
 }
 
 export interface Treatment {
@@ -355,7 +376,7 @@ export type LogAction =
   | 'create_diagnosis' | 'create_treatment' | 'create_examination' | 'create_lab'
   | 'view_form' | 'create_form' | 'update_form' | 'delete_form' | 'archive_form'
   | 'export_pdf' | 'create_prescription' | 'send_notification' | 'update_settings'
-  | 'chat_message' | 'create_note' | 'update_note' | 'approve_request';
+  | 'chat_message' | 'create_note' | 'update_note' | 'approve_request' | 'patient_account_created';
 
 export interface AuditLog {
   id: string;
@@ -733,6 +754,8 @@ export interface PatientDocument {
   uploadedAt: Date;
   isVisibleToPatient: boolean;
   description?: string;
+  category?: 'lab_result' | 'imaging' | 'referral' | 'prescription' | 'discharge' | 'other';
+  documentDate?: Date;
 }
 
 // Patient Question - Questions patient can ask
@@ -782,4 +805,74 @@ export interface PagePermission {
   allowedRoles: string[];
   allowedJobTitles: string[];
   requireBoth?: boolean;
+}
+
+// Medication Management
+export type MedicationCategory = 'reseptilääkkeet' | 'ensihoidon' | 'yli-ilmoitus' | 'homeopatia' | 'luontaistuotteet' | 'muut';
+
+export interface Medication {
+  id: string;
+  genericName: string; // Nimiaine
+  tradeName: string; // Kauppanimi
+  category: MedicationCategory;
+  atcCode?: string; // Anatomical Therapeutic Chemical code
+  form: string; // Muoto: tabletti, nesteittely, injektio jne
+  strength: string; // Vahvuus: mg, ml jne
+  dosage?: string; // Annos
+  sideEffects?: string[];
+  contraindications?: string[];
+  isActive: boolean;
+  createdAt: Date;
+}
+
+// Patient Medication (prescription instance)
+export interface PatientMedication {
+  id: string;
+  patientId: string;
+  medicationId: string;
+  medicationName: string;
+  dosage: string;
+  instructions: string;
+  frequency: string; // "3x päivässä", "kerran yöllä" jne
+  startDate: Date;
+  endDate?: Date;
+  prescribedBy: string;
+  prescribedByName?: string;
+  prescribedAt: Date;
+  isActive: boolean;
+}
+
+// Private Messaging System
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'staff' | 'patient';
+  recipientId: string;
+  recipientName: string;
+  content: string;
+  attachments?: MessageAttachment[];
+  createdAt: Date;
+  isRead: boolean;
+  readAt?: Date;
+}
+
+export interface MessageAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  url?: string;
+}
+
+export interface Conversation {
+  id: string;
+  participantIds: string[];
+  participantNames: string[];
+  lastMessage?: string;
+  lastMessageAt?: Date;
+  createdAt: Date;
+  isActive: boolean;
+  unreadCount?: number;
 }

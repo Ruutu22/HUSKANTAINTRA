@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { SavedForm, FormTemplate, Prescription, User, JobTitle, Notice, ShiftStatus, ApprovalRequest, Patient, Diagnosis, DiagnosisCategory, Treatment, Examination, LabValue, Disease, AuditLog, Notification, ChatMessage, SharedNote, SystemSettings, CustomStatus, WorkShift, SinglePatientAccount, PatientPortalAccess, LabOrder, ImagingStudy, Referral, UserGroup, ChatChannel, Appointment, ElectronicSignature, FormVersion, PatientAccount, PatientDocument, PatientQuestion, PatientHealthTracker, PatientReminder, StaffAccount } from '@/types';
+import type { SavedForm, FormTemplate, Prescription, User, JobTitle, Notice, ShiftStatus, ApprovalRequest, Patient, Diagnosis, DiagnosisCategory, Treatment, Examination, LabValue, Disease, AuditLog, Notification, ChatMessage, SharedNote, SystemSettings, CustomStatus, WorkShift, SinglePatientAccount, PatientPortalAccess, LabOrder, ImagingStudy, Referral, UserGroup, ChatChannel, Appointment, ElectronicSignature, FormVersion, PatientAccount, PatientDocument, PatientQuestion, PatientHealthTracker, PatientReminder, StaffAccount, Medication, PatientMedication, Message, Conversation } from '@/types';
 
 // Generic hook for localStorage
 function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
@@ -2363,5 +2363,147 @@ export function useFormPermissions() {
     canPatientDownloadForm,
     getPatientEditableFields,
     removeFormAccess,
+  };
+}
+
+// Medications hook
+export function useMedications() {
+  const [medications, setMedications] = useLocalStorage<Medication[]>('hus_medications', [
+    { id: '1', genericName: 'Metoprololi', tradeName: 'Betaloc', category: 'reseptilääkkeet', atcCode: 'C07AB02', form: 'tabletti', strength: '50mg', isActive: true, createdAt: new Date() },
+    { id: '2', genericName: 'Simvastatiini', tradeName: 'Zocor', category: 'reseptilääkkeet', atcCode: 'C10AA01', form: 'tabletti', strength: '20mg', isActive: true, createdAt: new Date() },
+    { id: '3', genericName: 'Parasetamoli', tradeName: 'Panacod', category: 'yli-ilmoitus', form: 'tabletti', strength: '500mg', isActive: true, createdAt: new Date() },
+  ]);
+
+  const addMedication = useCallback((med: Omit<Medication, 'id' | 'createdAt'>) => {
+    const newMed: Medication = {
+      ...med,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date(),
+    };
+    setMedications(prev => [...prev, newMed]);
+    return newMed.id;
+  }, [setMedications]);
+
+  const updateMedication = useCallback((id: string, updates: Partial<Medication>) => {
+    setMedications(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  }, [setMedications]);
+
+  const deleteMedication = useCallback((id: string) => {
+    setMedications(prev => prev.filter(m => m.id !== id));
+  }, [setMedications]);
+
+  const getMedicationsByCategory = useCallback((category: any) => {
+    return medications.filter(m => m.category === category && m.isActive);
+  }, [medications]);
+
+  return {
+    medications,
+    addMedication,
+    updateMedication,
+    deleteMedication,
+    getMedicationsByCategory,
+  };
+}
+
+// Patient Medications hook
+export function usePatientMedications() {
+  const [patientMeds, setPatientMeds] = useLocalStorage<PatientMedication[]>('hus_patient_medications', []);
+
+  const addPatientMedication = useCallback((med: Omit<PatientMedication, 'id'>) => {
+    const newMed: PatientMedication = {
+      ...med,
+      id: Math.random().toString(36).substr(2, 9),
+    };
+    setPatientMeds(prev => [...prev, newMed]);
+    return newMed.id;
+  }, [setPatientMeds]);
+
+  const updatePatientMedication = useCallback((id: string, updates: Partial<PatientMedication>) => {
+    setPatientMeds(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  }, [setPatientMeds]);
+
+  const deletePatientMedication = useCallback((id: string) => {
+    setPatientMeds(prev => prev.filter(m => m.id !== id));
+  }, [setPatientMeds]);
+
+  const getPatientMedications = useCallback((patientId: string) => {
+    return patientMeds.filter(m => m.patientId === patientId && m.isActive);
+  }, [patientMeds]);
+
+  return {
+    patientMedications: patientMeds,
+    addPatientMedication,
+    updatePatientMedication,
+    deletePatientMedication,
+    getPatientMedications,
+  };
+}
+
+// Messages hook
+export function useMessages() {
+  const [messages, setMessages] = useLocalStorage<Message[]>('hus_messages', []);
+  const [conversations, setConversations] = useLocalStorage<Conversation[]>('hus_conversations', []);
+
+  const createConversation = useCallback((participantIds: string[], participantNames: string[]) => {
+    const newConversation: Conversation = {
+      id: Math.random().toString(36).substr(2, 9),
+      participantIds,
+      participantNames,
+      createdAt: new Date(),
+      isActive: true,
+    };
+    setConversations(prev => [...prev, newConversation]);
+    return newConversation.id;
+  }, [setConversations]);
+
+  const sendMessage = useCallback((message: Omit<Message, 'id' | 'createdAt' | 'isRead' | 'readAt'>) => {
+    const newMessage: Message = {
+      ...message,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date(),
+      isRead: false,
+    };
+    setMessages(prev => [...prev, newMessage]);
+    
+    // Update conversation
+    setConversations(prev => prev.map(c => c.id === message.conversationId ? {
+      ...c,
+      lastMessage: message.content,
+      lastMessageAt: new Date(),
+    } : c));
+    
+    return newMessage.id;
+  }, [setMessages, setConversations]);
+
+  const markAsRead = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isRead: true, readAt: new Date() } : m));
+  }, [setMessages]);
+
+  const getConversation = useCallback((conversationId: string) => {
+    return conversations.find(c => c.id === conversationId);
+  }, [conversations]);
+
+  const getConversationMessages = useCallback((conversationId: string) => {
+    return messages.filter(m => m.conversationId === conversationId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [messages]);
+
+  const getUserConversations = useCallback((userId: string) => {
+    return conversations.filter(c => c.participantIds.includes(userId));
+  }, [conversations]);
+
+  const getUnreadCount = useCallback((conversationId: string, userId: string) => {
+    return messages.filter(m => m.conversationId === conversationId && m.recipientId === userId && !m.isRead).length;
+  }, [messages]);
+
+  return {
+    messages,
+    conversations,
+    createConversation,
+    sendMessage,
+    markAsRead,
+    getConversation,
+    getConversationMessages,
+    getUserConversations,
+    getUnreadCount,
   };
 }

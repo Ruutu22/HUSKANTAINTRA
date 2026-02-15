@@ -11,6 +11,8 @@ import { MuokkaaPage } from '@/sections/MuokkaaPage';
 import { ReseptitPage } from '@/sections/ReseptitPage';
 import { KayttajatPage } from '@/sections/KayttajatPage';
 import { StaffAccountsPage } from '@/sections/StaffAccountsPage';
+import { MedicationPage } from '@/sections/MedicationPage';
+import { DiagnosisSystemPage } from '@/sections/DiagnosisSystemPage';
 import { OhjeistuksetPage } from '@/sections/OhjeistuksetPage';
 import { RaportitPage } from '@/sections/RaportitPage';
 import { VuorotPage } from '@/sections/VuorotPage';
@@ -82,6 +84,10 @@ function AppContent() {
         return <KayttajatPage />;
       case 'henkilokunnan-tunnukset':
         return <StaffAccountsPage />;
+      case 'laakkeet':
+        return <MedicationPage />;
+      case 'diagnoosi-luokitus':
+        return <DiagnosisSystemPage />;
       case 'ohjeistukset':
         return <OhjeistuksetPage />;
       case 'raportit':

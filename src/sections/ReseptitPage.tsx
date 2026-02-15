@@ -27,6 +27,8 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { medications } from '@/data/medications';
+import { checkDrugAllergies, checkDrugInteractions } from '@/data/drugAlerts';
+import { AllergyAlerts } from '@/components/AllergyAlerts';
 
 export function ReseptitPage() {
   const { prescriptions, addPrescription, deletePrescription, searchPrescriptions } = usePrescriptions();
@@ -49,6 +51,10 @@ export function ReseptitPage() {
   const [isConfidential, setIsConfidential] = useState(false);
   const [medicationSearch, setMedicationSearch] = useState('');
   const [showMedicationList, setShowMedicationList] = useState(false);
+  
+  // Allergy and interaction warnings
+  const [allergyWarnings, setAllergyWarnings] = useState<string[]>([]);
+  const [interactionWarnings, setInteractionWarnings] = useState<Array<{medication: string; severity: 'minor' | 'moderate' | 'severe'; description: string}>>([]);
 
   // Filter medications
   const filteredMedications = medicationSearch 
@@ -60,6 +66,11 @@ export function ReseptitPage() {
 
   // Search prescriptions
   const filteredPrescriptions = searchPrescriptions(searchQuery).filter(p => {
+    // If patient is logged in, only show their prescriptions
+    if (user?.isPatient) {
+      if (p.patientId !== user.patientId) return false;
+    }
+    
     if (activeTab === 'confidential') return p.isConfidential;
     if (activeTab === 'normal') return !p.isConfidential;
     return true;
@@ -71,12 +82,42 @@ export function ReseptitPage() {
     setInstructions(med.instructions);
     setShowMedicationList(false);
     setMedicationSearch('');
+    
+    // Check for allergies and interactions
+    if (selectedPatient) {
+      const allergies = selectedPatient.allergies || [];
+      const newAlergies = checkDrugAllergies(med.name, allergies);
+      setAllergyWarnings(newAlergies);
+      
+      // Check interactions with existing prescriptions
+      const existingPrescriptions = prescriptions.filter(p => p.patientId === selectedPatient.id);
+      const existingMeds = existingPrescriptions.map(p => p.medication);
+      const interactions = checkDrugInteractions(existingMeds, med.name);
+      setInteractionWarnings(interactions);
+    }
   };
 
   const handleCreate = () => {
     if (!selectedPatient || !medication.trim() || !dosage.trim()) {
       toast.error('Täytä kaikki pakolliset kentät');
       return;
+    }
+
+    // Check for critical allergies
+    if (allergyWarnings.length > 0) {
+      const message = `VAROITUS: Potilaalla on allergia seuraaviin lääkkeiden ainesosiin: ${allergyWarnings.join(', ')}. Haluatko silti kirjoittaa reseptin?`;
+      if (!confirm(message)) {
+        return;
+      }
+    }
+
+    // Check for critical interactions
+    const severeInteractions = interactionWarnings.filter(i => i.severity === 'severe');
+    if (severeInteractions.length > 0) {
+      const message = `KRIITTINEN VAROITUS: Lääkkeen seuraavat yhdysvaikutukset on merkitty kriittisinä:\n${severeInteractions.map(i => `- ${i.medication}: ${i.description}`).join('\n')}\n\nHaluatko silti jatkaa?`;
+      if (!confirm(message)) {
+        return;
+      }
     }
 
     const validUntil = new Date();
@@ -124,6 +165,8 @@ export function ReseptitPage() {
     setInstructions('');
     setValidDays('30');
     setIsConfidential(false);
+    setAllergyWarnings([]);
+    setInteractionWarnings([]);
     setIsCreateDialogOpen(false);
     toast.success('Resepti kirjoitettu');
   };
@@ -333,6 +376,8 @@ export function ReseptitPage() {
                     setMedication(e.target.value);
                     setMedicationSearch(e.target.value);
                     setShowMedicationList(true);
+                    setAllergyWarnings([]);
+                    setInteractionWarnings([]);
                   }}
                   onFocus={() => setShowMedicationList(true)}
                   placeholder="Hae lääkettä tai kirjoita nimi..."
@@ -355,6 +400,11 @@ export function ReseptitPage() {
                   </div>
                 </ScrollArea>
               )}
+              
+              {/* Allergy and Interaction Warnings */}
+              <div className="mt-3">
+                <AllergyAlerts allergyWarnings={allergyWarnings} interactionWarnings={interactionWarnings} />
+              </div>
             </div>
 
             <div>

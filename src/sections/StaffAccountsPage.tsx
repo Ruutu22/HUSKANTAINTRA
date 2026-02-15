@@ -20,6 +20,7 @@ import {
   Copy,
   Check,
   Save,
+  Pencil,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -32,10 +33,11 @@ const STAFF_ROLES: { value: UserRole; label: string }[] = [
 ];
 
 export function StaffAccountsPage() {
-  const { accounts, createAccount, deleteAccount } = useStaffAccounts();
+  const { accounts, createAccount, updateAccount, deleteAccount } = useStaffAccounts();
   const { isJYL } = useAuth();
   
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form fields
@@ -84,6 +86,46 @@ export function StaffAccountsPage() {
     return result;
   };
 
+  const resetForm = () => {
+    setName('');
+    setUsername('');
+    setPassword('');
+    setRole('LÄÄKÄRI');
+    setJobTitle('');
+    setExpiryValue('');
+    setExpiryUnit('months');
+    setEditingId(null);
+  };
+
+  const openEditDialog = (account: any) => {
+    setEditingId(account.id);
+    setName(account.name);
+    setUsername(account.username);
+    setPassword(account.password);
+    setRole(account.role);
+    setJobTitle(account.jobTitle || '');
+    setShowCreateDialog(true);
+    
+    // Calculate expiry value
+    if (account.expiresAt) {
+      const expiryDate = new Date(account.expiresAt);
+      const now = new Date();
+      const diffMs = expiryDate.getTime() - now.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffDays >= 30) {
+        setExpiryValue(String(Math.floor(diffDays / 30)));
+        setExpiryUnit('months');
+      } else if (diffDays > 0) {
+        setExpiryValue(String(diffDays));
+        setExpiryUnit('days');
+      } else {
+        setExpiryValue('1');
+        setExpiryUnit('months');
+      }
+    }
+  };
+
   const handleCreate = () => {
     if (!name.trim() || !username.trim() || !password.trim() || !expiryValue) {
       toast.error('Täytä kaikki pakolliset kentät');
@@ -112,28 +154,38 @@ export function StaffAccountsPage() {
     }
 
     try {
-      createAccount({
-        name: name.trim(),
-        username: username.trim(),
-        password: password.trim(),
-        role,
-        jobTitle: jobTitle.trim() || undefined,
-        isActive: true,
-        expiresAt,
-        ...permissions,
-      });
+      if (editingId) {
+        // Update existing account
+        updateAccount(editingId, {
+          name: name.trim(),
+          username: username.trim(),
+          password: password.trim(),
+          role,
+          jobTitle: jobTitle.trim() || undefined,
+          isActive: true,
+          expiresAt,
+          ...permissions,
+        });
+        toast.success('Henkilökunnan tunnus päivitetty onnistuneesti!');
+      } else {
+        // Create new account
+        createAccount({
+          name: name.trim(),
+          username: username.trim(),
+          password: password.trim(),
+          role,
+          jobTitle: jobTitle.trim() || undefined,
+          isActive: true,
+          expiresAt,
+          ...permissions,
+        });
+        toast.success('Henkilökunnan tunnus luotu onnistuneesti!');
+      }
 
-      toast.success('Henkilökunnan tunnus luotu onnistuneesti!');
       setShowCreateDialog(false);
-      setName('');
-      setUsername('');
-      setPassword('');
-      setRole('LÄÄKÄRI');
-      setJobTitle('');
-      setExpiryValue('');
-      setExpiryUnit('months');
+      resetForm();
     } catch (error) {
-      toast.error('Virhe tunnuksen luonnissa: ' + (error as Error).message);
+      toast.error('Virhe tunnuksen käsittelyssa: ' + (error as Error).message);
     }
   };
 
@@ -239,19 +291,29 @@ export function StaffAccountsPage() {
                         </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm('Haluatko varmasti poistaa tämän henkilökunnan tunnuksen?')) {
-                          deleteAccount(account.id);
-                          toast.success('Henkilökunnan tunnus poistettu');
-                        }
-                      }}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(account)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm('Haluatko varmasti poistaa tämän henkilökunnan tunnuksen?')) {
+                            deleteAccount(account.id);
+                            toast.success('Henkilökunnan tunnus poistettu');
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -261,12 +323,15 @@ export function StaffAccountsPage() {
       </div>
 
       {/* Create Staff Account Dialog */}
-      <Sheet open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Sheet open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open);
+        if (!open) resetForm();
+      }}>
         <SheetContent side="right" className="w-full sm:w-[500px] overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>Luo henkilökunnan tunnus</SheetTitle>
+            <SheetTitle>{editingId ? 'Muokkaa henkilökunnan tunnusta' : 'Luo henkilökunnan tunnus'}</SheetTitle>
             <SheetDescription>
-              Täytä tiedot ja aseta käyttöoikeudet
+              {editingId ? 'Päivitä tunnuksen tiedot' : 'Täytä tiedot ja aseta käyttöoikeudet'}
             </SheetDescription>
           </SheetHeader>
           
