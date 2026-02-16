@@ -129,6 +129,8 @@ export interface FormTemplate {
   patientEditableFields?: string[];
   // Whether patients can download the form
   canPatientDownload?: boolean;
+  // Optional snapshot PDF (data URL) for preview/printing
+  snapshotPdf?: string;
 }
 
 export interface TemplateImage {
@@ -163,6 +165,7 @@ export interface SavedForm {
   approvedAt?: Date;
   visibleTo?: string[];
   rejectionReason?: string;
+  snapshotPdf?: string; // Optional data URL of a PDF snapshot for preview/print
 }
 
 // Prescription types
@@ -436,6 +439,10 @@ export interface SharedNote {
   isPinned: boolean;
   color?: string;
   visibleToRoles?: string[];
+  // If true, note is explicitly visible to the patient(s)
+  visibleToPatient?: boolean;
+  // If true, note is confidential: visible to patient, the author and JYL only
+  confidential?: boolean;
 }
 
 // Settings types

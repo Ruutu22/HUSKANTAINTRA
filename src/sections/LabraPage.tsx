@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FlaskConical, Plus, Calendar, FileText, CheckCircle, Clock, User } from 'lucide-react';
+import { FlaskConical, Plus, Calendar, FileText, CheckCircle, Clock, User, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 const COMMON_LAB_TESTS = [
   { code: 'B-Hb', name: 'Hemoglobiini', category: 'Verenkuva', unit: 'g/L', ref: 'Miehet: 134-170, Naiset: 117-153' },
@@ -45,6 +46,10 @@ export function LabraPage() {
   const [notes, setNotes] = useState('');
   const [resultsText, setResultsText] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isAssignPatientOpen, setIsAssignPatientOpen] = useState(false);
+  const [assignmentPatient, setAssignmentPatient] = useState<any>(null);
+  const [assignmentPatientSearch, setAssignmentPatientSearch] = useState('');
+  const [orderToAssign, setOrderToAssign] = useState<any>(null);
 
   const filteredPatients = patientSearch ? searchPatients(patientSearch) : patients;
   const pendingOrders = getPendingOrders();
@@ -121,11 +126,44 @@ export function LabraPage() {
       targetName: `Labratilaus ${orderId}`,
       details: 'Lähetetty tutkimukseen',
     });
+    
+    toast.success('Tilaus lähetetty tutkimukseen');
   };
 
   const handleOpenResults = (order: any) => {
     setSelectedOrder(order);
     setResultsText('');
+  };
+
+  const handleAssignPatient = (order: any) => {
+    setOrderToAssign(order);
+    setIsAssignPatientOpen(true);
+    setAssignmentPatient(null);
+    setAssignmentPatientSearch('');
+  };
+
+  const handleConfirmAssignPatient = () => {
+    if (!orderToAssign || !assignmentPatient || !user) return;
+    
+    updateOrder(orderToAssign.id, {
+      status: 'patient_assigned',
+      assignedToPatientId: assignmentPatient.id,
+      assignedToPatientName: `${assignmentPatient.firstName} ${assignmentPatient.lastName}`,
+    });
+    
+    addLog({
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'update_form',
+      targetName: `Labratilaus ${orderToAssign.id}`,
+      details: `Lähetetty potilaalle ${assignmentPatient.firstName} ${assignmentPatient.lastName}`,
+    });
+
+    setIsAssignPatientOpen(false);
+    setOrderToAssign(null);
+    setAssignmentPatient(null);
+    setAssignmentPatientSearch('');
   };
 
   const getPriorityColor = (priority: string) => {
@@ -226,7 +264,7 @@ export function LabraPage() {
 
         <TabsContent value="pending">
           <div className="space-y-3">
-            {pendingOrders.filter(o => user?.isPatient ? o.patientId === user.patientId : true).map((order) => (
+            {pendingOrders.filter(o => user?.isPatient ? o.patientId === user.patientId || o.assignedToPatientId === user.patientId : true).map((order) => (
               <Card key={order.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -256,25 +294,47 @@ export function LabraPage() {
                         {order.priority === 'stat' ? 'STAT' : order.priority === 'urgent' ? 'Kiireellinen' : 'Normaali'}
                       </Badge>
                       <p className="text-sm text-gray-500">{order.orderedByName}</p>
-                      <div className="flex gap-2 mt-2">
+                      <div className="flex gap-2 mt-2 flex-wrap justify-end">
                         {order.status === 'pending' && !user?.isPatient && (
+                          <>
+                            <Button 
+                              onClick={() => handleAssignPatient(order)}
+                              size="sm" 
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Lähetä potilaalle
+                            </Button>
+                            <Button 
+                              onClick={() => handleSendForTesting(order.id)}
+                              size="sm" 
+                              className="bg-orange-500 hover:bg-orange-600 text-white"
+                            >
+                              <Clock className="w-3 h-3 mr-1" />
+                              Lähetä tutkimukseen
+                            </Button>
+                          </>
+                        )}
+                        {(order.status === 'patient_assigned' || order.status === 'in_progress') && !user?.isPatient && (
                           <Button 
-                            onClick={() => handleSendForTesting(order.id)}
+                            onClick={() => handleOpenResults(order)}
                             size="sm" 
-                            className="bg-orange-500 hover:bg-orange-600 text-white"
+                            className="bg-blue-500 hover:bg-blue-600 text-white"
                           >
-                            <Clock className="w-3 h-3 mr-1" />
-                            Lähetä tutkimukseen
+                            <FileText className="w-3 h-3 mr-1" />
+                            Kirjaa tulokset
                           </Button>
                         )}
-                        <Button 
-                          onClick={() => handleOpenResults(order)}
-                          size="sm" 
-                          variant="outline"
-                        >
-                          <FileText className="w-3 h-3 mr-1" />
-                          {order.results ? 'Katsele tuloksia' : 'Kirjaa tuloksia'}
-                        </Button>
+                        {(order.status === 'patient_assigned' || order.status === 'in_progress') && user?.isPatient && (
+                          <Button 
+                            onClick={() => handleOpenResults(order)}
+                            size="sm" 
+                            variant="outline"
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            {order.results ? 'Katsele tuloksia' : 'Odota tuloksia'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -410,7 +470,10 @@ export function LabraPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      
+      </div>
+    );
+  }
       {/* Results Dialog */}
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
         <DialogContent className="max-w-2xl">
@@ -452,6 +515,52 @@ export function LabraPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+
+      {/* Assign Patient Dialog */}
+      <Dialog open={isAssignPatientOpen} onOpenChange={setIsAssignPatientOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lähetä potilaalle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Etsi potilas</Label>
+              <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Hae potilaan nimellä..."
+                  value={assignmentPatientSearch}
+                  onChange={(e) => setAssignmentPatientSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="border rounded-lg max-h-64 overflow-y-auto">
+              {(assignmentPatientSearch ? searchPatients(assignmentPatientSearch) : patients)
+                .filter(p => !p.isStaff)
+                .map((patient: any) => (
+                  <div
+                    key={patient.id}
+                    onClick={() => setAssignmentPatient(patient)}
+                    className={`p-3 border-b cursor-pointer hover:bg-gray-50 ${
+                      assignmentPatient?.id === patient.id ? 'bg-blue-50 border-blue-500' : ''
+                    }`}
+                  >
+                    <p className="font-medium">{patient.firstName} {patient.lastName}</p>
+                    <p className="text-sm text-gray-500">{patient.phoneNumber || 'Ei numeroa'}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignPatientOpen(false)}>Peruuta</Button>
+            <Button 
+              onClick={handleConfirmAssignPatient}
+              disabled={!assignmentPatient}
+              className="bg-green-500 hover:bg-green-600"
+            >
+              Lähetä
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>

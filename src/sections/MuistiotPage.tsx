@@ -45,9 +45,8 @@ export function MuistiotPage() {
     isPinned: false,
     visibleToRoles: [],
   });
-
-  const visibleNotes = user ? getVisibleNotes(user.role, isJYL) : [];
-  const pinnedNotes = user ? getPinnedNotes(user.role, isJYL) : [];
+  const visibleNotes = user ? getVisibleNotes(user.role, isJYL, user.id) : [];
+  const pinnedNotes = user ? getPinnedNotes(user.role, isJYL, user.id) : [];
   const unpinnedNotes = visibleNotes.filter(n => !n.isPinned);
 
   const handleAddNote = () => {
@@ -61,6 +60,8 @@ export function MuistiotPage() {
       isPinned: newNote.isPinned || false,
       color: newNote.color || 'bg-white',
       visibleToRoles: newNote.visibleToRoles || [],
+      visibleToPatient: newNote.visibleToPatient !== undefined ? newNote.visibleToPatient : true,
+      confidential: newNote.confidential || false,
     });
 
     setNewNote({
@@ -84,6 +85,8 @@ export function MuistiotPage() {
         color: selectedNote.color,
         isPinned: selectedNote.isPinned,
         visibleToRoles: selectedNote.visibleToRoles,
+        visibleToPatient: selectedNote.visibleToPatient !== undefined ? selectedNote.visibleToPatient : true,
+        confidential: selectedNote.confidential || false,
       },
       user.id,
       user.name
@@ -139,6 +142,24 @@ export function MuistiotPage() {
                   onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
                   placeholder="Muistion otsikko"
                 />
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={!!newNote.visibleToPatient}
+                    onChange={(e) => setNewNote({ ...newNote, visibleToPatient: e.target.checked })}
+                  />
+                  <span>Näkyy potilaalle</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={!!newNote.confidential}
+                    onChange={(e) => setNewNote({ ...newNote, confidential: e.target.checked })}
+                  />
+                  <span>Salassa pidettävä (näkyy potilaalle ja kirjanneelle)</span>
+                </label>
               </div>
               <div className="space-y-2">
                 <Label>Sisältö</Label>
@@ -283,6 +304,24 @@ export function MuistiotPage() {
           </DialogHeader>
           {selectedNote && (
             <div className="space-y-4 py-4">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={!!selectedNote.visibleToPatient}
+                    onChange={(e) => setSelectedNote({ ...selectedNote, visibleToPatient: e.target.checked })}
+                  />
+                  <span>Näkyy potilaalle</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={!!selectedNote.confidential}
+                    onChange={(e) => setSelectedNote({ ...selectedNote, confidential: e.target.checked })}
+                  />
+                  <span>Salassa pidettävä (näkyy potilaalle ja kirjanneelle)</span>
+                </label>
+              </div>
               <div className="space-y-2">
                 <Label>Otsikko</Label>
                 <Input

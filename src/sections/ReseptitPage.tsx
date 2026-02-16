@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { medications } from '@/data/medications';
 import { checkDrugAllergies, checkDrugInteractions } from '@/data/drugAlerts';
 import { AllergyAlerts } from '@/components/AllergyAlerts';
+import { createPdfFromElementSelector } from '@/lib/pdfConverter';
 
 export function ReseptitPage() {
   const { prescriptions, addPrescription, deletePrescription, searchPrescriptions } = usePrescriptions();
@@ -181,7 +182,22 @@ export function ReseptitPage() {
     : null;
 
   const handlePrint = () => {
-    window.print();
+    (async () => {
+      try {
+        // Try to create a PDF snapshot of the printable prescription area
+        const filename = `${selectedPrescriptionData?.patientName || 'resepti'}`.replace(/\s+/g, '_') + '.pdf';
+        const dataUrl = await createPdfFromElementSelector('.printable-prescription .p-8.bg-white', filename);
+        // Open the generated data URL in a new tab for patient download/print
+        if (dataUrl) {
+          const w = window.open(dataUrl, '_blank');
+          if (w) w.focus();
+          return;
+        }
+      } catch (err) {
+        console.warn('PDF generation failed, falling back to print:', err);
+      }
+      window.print();
+    })();
   };
 
   const filteredPatients = patientSearch ? searchPatients(patientSearch) : [];

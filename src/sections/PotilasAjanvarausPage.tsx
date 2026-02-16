@@ -1,3 +1,4 @@
+import { usePatients, useAppointments, useUsers, useAuditLogs, useNotifications } from '@/hooks/useStorage';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePatients, useAppointments, useUsers, useAuditLogs } from '@/hooks/useStorage';
@@ -26,6 +27,7 @@ export function PotilasAjanvarausPage() {
   const { appointments, createAppointment, cancelAppointment } = useAppointments();
   const { users } = useUsers();
   const { addLog } = useAuditLogs();
+  const { sendNotification } = useNotifications();
 
   const [activeTab, setActiveTab] = useState('upcoming');
   const [patient, setPatient] = useState<any>(null);
@@ -131,14 +133,29 @@ export function PotilasAjanvarausPage() {
     
     cancelAppointment(appointmentId);
     
-    if (user) {
+    // Send notification to doctor
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (appointment && user) {
+      const isPatientCancelling = user?.isPatient;
+      const recipientId = isPatientCancelling ? appointment.doctorId : appointment.patientId;
+      sendNotification({
+        title: 'Ajanvaraus peruutettu',
+        message: isPatientCancelling
+          ? `Potilas ${appointment.patientName} perui ajan ${new Date(appointment.date).toLocaleString('fi-FI')}`
+          : `Lääkäri ${appointment.doctorName} perui ajan ${new Date(appointment.date).toLocaleString('fi-FI')}`,
+        sentBy: user.id,
+        sentByName: user.name,
+        targetUsers: [recipientId],
+        priority: 'normal',
+      });
+
       addLog({
         userId: user.id,
         userName: user.name || patient?.firstName || 'Potilas',
-        userRole: 'POTILAS',
+        userRole: user.role || 'POTILAS',
         action: 'update_form',
         targetName: 'Ajanvaraus',
-        details: 'Potilas perui ajan',
+        details: 'Aika peruutettu',
       });
     }
     

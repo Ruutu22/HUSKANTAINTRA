@@ -142,31 +142,55 @@ export function UusiPage({ onFormCreated }: UusiPageProps) {
     setPdfReason('');
   };
 
-  const handleSave = () => {
-    if (selectedTemplateData && patientName.trim()) {
-      addForm({
-        templateId: selectedTemplateData.id,
-        templateName: selectedTemplateData.name,
-        patientName: patientName.trim(),
-        data: { ...formData, approvalStatus },
-        createdBy: user?.name || 'Tuntematon',
-        isArchived: false,
-      });
-      
-      if (user) {
-        addLog({
-          userId: user.id,
-          userName: user.name,
-          userRole: user.role,
-          action: 'create_form',
-          targetName: selectedTemplateData.name,
-          details: `Lomake luotu potilaalle ${patientName}`,
-        });
+  const handleSave = async () => {
+    if (!selectedTemplateData || !patientName.trim()) return;
+
+    // Ensure we have a PDF snapshot of the rendered preview to store with the form.
+    let snapshotPdf: string | undefined = undefined;
+    try {
+      // If preview dialog is not open, open it briefly so the DOM is rendered
+      const wasPreviewOpen = showPreview;
+      if (!wasPreviewOpen) setShowPreview(true);
+      // wait for next paint
+      await new Promise(requestAnimationFrame);
+
+      // Try to locate the preview container rendered in the dialog
+      // This matches the preview container: DialogContent > ScrollArea > div.p-8.bg-white
+      try {
+        const pdfData = await import('@/lib/pdfConverter').then(m => m.createPdfFromElementSelector('.p-8.bg-white', `${selectedTemplateData.name.replace(/\s+/g,'_')}.pdf`));
+        snapshotPdf = pdfData;
+      } catch (err) {
+        console.warn('Could not create PDF snapshot:', err);
       }
-      
-      onFormCreated?.();
-      handleBack();
+
+      if (!wasPreviewOpen) setShowPreview(false);
+    } catch (err) {
+      console.warn('Snapshot error', err);
     }
+
+    addForm({
+      templateId: selectedTemplateData.id,
+      templateName: selectedTemplateData.name,
+      patientName: patientName.trim(),
+      data: { ...formData, approvalStatus },
+      createdBy: user?.name || 'Tuntematon',
+      isArchived: false,
+      snapshotPdf,
+    });
+    
+    if (user) {
+      addLog({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: 'create_form',
+        targetName: selectedTemplateData.name,
+        details: `Lomake luotu potilaalle ${patientName}`,
+      });
+    }
+
+    onFormCreated?.();
+    handleBack();
   };
 
   const handleBack = () => {

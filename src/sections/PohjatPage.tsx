@@ -235,24 +235,23 @@ export function PohjatPage() {
 
   const handleCreateTemplate = async () => {
     if (newTemplateName.trim()) {
-      let pdfContent: string | undefined;
-      
-      // Konvertoi HTML:n PDF:ksi jos HTML-siskällöt on
+      let snapshotDataUrl: string | undefined;
+
+      // Konvertoi HTML:n PDF:ksi jos HTML-sisällöt on — tallenna snapshot erilliseen kenttään
       if (activeTab === 'html' && htmlContent) {
         try {
           const pdfBlob = await convertHtmlToPdfBlob(htmlContent);
-          pdfContent = await new Promise<string>((resolve) => {
+          snapshotDataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(pdfBlob);
           });
         } catch (error) {
           console.error('PDF conversion failed:', error);
-          // Fallback - tallenna tyhjä jos PDF konversio epäonnistui
-          pdfContent = undefined;
+          snapshotDataUrl = undefined;
         }
       }
-      
+
       addTemplate({
         name: newTemplateName.trim(),
         description: newTemplateDesc.trim(),
@@ -262,7 +261,9 @@ export function PohjatPage() {
           fields: fields.sort((a, b) => (a.order || 0) - (b.order || 0)),
         }],
         createdBy: user?.name || 'JYL',
-        html: pdfContent, // Tallenna PDF-data URL HTML-kenttään
+        // Store raw HTML in `html` and PDF snapshot separately
+        html: activeTab === 'html' ? htmlContent : undefined,
+        snapshotPdf: snapshotDataUrl,
         images,
         category: selectedCategory,
         allowedRoles: allowedRoles.length > 0 ? allowedRoles : undefined,
@@ -291,23 +292,23 @@ export function PohjatPage() {
 
   const handleSaveEdit = async () => {
     if (editingTemplate) {
-      let pdfContent: string | undefined;
-      
-      // Konvertoi HTML:n PDF:ksi jos HTML-sisällöt on
+      let snapshotDataUrl: string | undefined;
+
+      // Konvertoi HTML:n PDF:ksi jos HTML-sisällöt on — tallenna snapshot erilliseen kenttään
       if (activeTab === 'html' && htmlContent) {
         try {
           const pdfBlob = await convertHtmlToPdfBlob(htmlContent);
-          pdfContent = await new Promise<string>((resolve) => {
+          snapshotDataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(pdfBlob);
           });
         } catch (error) {
           console.error('PDF conversion failed:', error);
-          pdfContent = undefined;
+          snapshotDataUrl = undefined;
         }
       }
-      
+
       updateTemplate(editingTemplate, {
         name: newTemplateName,
         description: newTemplateDesc,
@@ -316,7 +317,9 @@ export function PohjatPage() {
           title: 'Pääosio',
           fields: fields.sort((a, b) => (a.order || 0) - (b.order || 0)),
         }],
-        html: pdfContent, // Tallenna PDF-data URL HTML-kenttään
+        // Keep/edit raw HTML separately from PDF snapshot
+        html: activeTab === 'html' ? htmlContent : undefined,
+        snapshotPdf: snapshotDataUrl,
         images,
         category: selectedCategory,
         allowedRoles: allowedRoles.length > 0 ? allowedRoles : undefined,
@@ -449,7 +452,7 @@ export function PohjatPage() {
           resetForm();
         }
       }}>
-        <DialogContent className="max-w-6xl max-h-[95vh]">
+        <DialogContent className="max-w-6xl max-h-[95vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{isEditDialogOpen ? 'Muokkaa pohjaa' : 'Luo uusi lomakepohja'}</DialogTitle>
             <DialogDescription>
@@ -457,11 +460,11 @@ export function PohjatPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-6 overflow-y-auto flex-1 min-h-0 px-4 pr-6">
             {/* Left side - Editor */}
-            <div className="space-y-4">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+            <div className="space-y-4 overflow-y-auto pr-2">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col h-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
                   <TabsTrigger value="visual">
                     <Type className="w-4 h-4 mr-2" />
                     Visuaalinen
@@ -472,8 +475,383 @@ export function PohjatPage() {
                   </TabsTrigger>
                 </TabsList>
 
-                <ScrollArea className="h-[60vh]">
-                  <TabsContent value="visual" className="space-y-4">
+                <ScrollArea className="flex-1 overflow-hidden">
+                  <TabsContent value="visual" className="space-y-4 pr-4">
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Pohjan nimi</Label>
+                        <Input 
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="Esim. Erikoislääkärin arviointi"
+                        />
+                      </div>
+                      <div>
+                        <Label>Kuvaus</Label>
+                        <Input 
+                          value={newTemplateDesc}
+                          onChange={(e) => setNewTemplateDesc(e.target.value)}
+                          placeholder="Lyhyt kuvaus pohjasta"
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Kategoria</Label>
+                        <Select value={selectedCategory} onValueChange={(v: any) => setSelectedCategory(v)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="tt">Työterveys</SelectItem>
+                            <SelectItem value="psykologi">Psykologi</SelectItem>
+                            <SelectItem value="raportti">Raportti</SelectItem>
+                            <SelectItem value="vuoro">Vuoro</SelectItem>
+                            <SelectItem value="muu">Muu</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Approval Flow */}
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <input 
+                          type="checkbox"
+                          id="approvalFlow"
+                          checked={hasApprovalFlow}
+                          onChange={(e) => setHasApprovalFlow(e.target.checked)}
+                          className="rounded border-amber-400"
+                        />
+                        <div>
+                          <Label htmlFor="approvalFlow" className="cursor-pointer font-medium text-amber-800">
+                            Vaatii hyväksynnän
+                          </Label>
+                          <p className="text-xs text-amber-600">
+                            Lomake vaat esihenkilön hyväksynnän ennen kuin se näkyy muille
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Allowed Roles */}
+                      <div>
+                        <Label className="text-sm font-medium">Kenellä oikeus täyttää</Label>
+                        <div className="space-y-2 mt-2 max-h-32 overflow-y-auto border rounded-lg p-3">
+                          {jobTitles.map((title) => (
+                            <label key={title.id} className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={allowedRoles.includes(title.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setAllowedRoles([...allowedRoles, title.id]);
+                                  } else {
+                                    setAllowedRoles(allowedRoles.filter(id => id !== title.id));
+                                  }
+                                }}
+                                className="rounded"
+                              />
+                              <span className="text-sm">{title.name}</span>
+                            </label>
+                          ))}
+                          <p className="text-xs text-gray-500 mt-2">
+                            Jos et valitse ketään, kaikki voivat täyttää
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Field Toolbar */}
+                      <div>
+                        <Label className="text-sm font-medium mb-2 block">Lisää kenttiä:</Label>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('text')}>
+                            <Type className="w-4 h-4 mr-1" />
+                            Teksti
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('checkbox')}>
+                            <CheckSquare className="w-4 h-4 mr-1" />
+                            Valintaruutu
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('radio')}>
+                            <Circle className="w-4 h-4 mr-1" />
+                            Valintanappi
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('textarea')}>
+                            <AlignLeft className="w-4 h-4 mr-1" />
+                            Tekstialue
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('date')}>
+                            <Calendar className="w-4 h-4 mr-1" />
+                            Päivämäärä
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('signature')}>
+                            <FileText className="w-4 h-4 mr-1" />
+                            Allekirjoitus
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('approval')} className="border-green-300 text-green-700">
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Hyväksy
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleAddField('reject')} className="border-red-300 text-red-700">
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Hylkää
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={handleAddImage}>
+                            <ImageIcon className="w-4 h-4 mr-1" />
+                            Kuva
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Fields List */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Lomakkeen kentät:</Label>
+                        {fields.length === 0 && images.length === 0 && (
+                          <p className="text-sm text-gray-500 italic">Ei vielä kenttiä. Lisää kenttiä yllä olevista painikkeista.</p>
+                        )}
+                        {fields.sort((a, b) => (a.order || 0) - (b.order || 0)).map((field, index) => (
+                          <Card key={field.id} className="bg-gray-50">
+                            <CardContent className="p-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <button 
+                                    onClick={() => handleMoveField(field.id, 'up')}
+                                    disabled={index === 0}
+                                    className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button 
+                                    onClick={() => handleMoveField(field.id, 'down')}
+                                    disabled={index === fields.length - 1}
+                                    className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                                  >
+                                    ▼
+                                  </button>
+                                </div>
+                                <GripVertical className="w-4 h-4 text-gray-400" />
+                                <div className="flex-1 grid grid-cols-3 gap-2">
+                                  <Input 
+                                    value={field.label}
+                                    onChange={(e) => handleUpdateField(field.id, { label: e.target.value })}
+                                    placeholder="Kentän otsikko"
+                                    className="text-sm"
+                                  />
+                                  <Input 
+                                    value={field.placeholder || ''}
+                                    onChange={(e) => handleUpdateField(field.id, { placeholder: e.target.value })}
+                                    placeholder="Ohjeteksti"
+                                    className="text-sm"
+                                  />
+                                  <Select 
+                                    value={field.type}
+                                    onValueChange={(v) => handleUpdateField(field.id, { type: v as FieldType })}
+                                  >
+                                    <SelectTrigger className="text-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">Teksti</SelectItem>
+                                      <SelectItem value="checkbox">Valintaruutu</SelectItem>
+                                      <SelectItem value="radio">Valintanappi</SelectItem>
+                                      <SelectItem value="textarea">Tekstialue</SelectItem>
+                                      <SelectItem value="date">Päivämäärä</SelectItem>
+                                      <SelectItem value="signature">Allekirjoitus</SelectItem>
+                                      <SelectItem value="approval">Hyväksy</SelectItem>
+                                      <SelectItem value="reject">Hylkää</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="text-red-500"
+                                  onClick={() => handleRemoveField(field.id)}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {/* Images */}
+                      {images.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Kuvat (vedä esikatselussa):</Label>
+                          {images.map((image) => (
+                            <Card key={image.id} className="bg-amber-50 border-amber-200">
+                              <CardContent className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <ImageIcon className="w-4 h-4 text-amber-600" />
+                                  <Input 
+                                    value={image.src}
+                                    onChange={(e) => handleUpdateImage(image.id, { src: e.target.value })}
+                                    placeholder="Kuvan URL"
+                                    className="text-sm flex-1"
+                                  />
+                                  <Input 
+                                    type="number"
+                                    value={image.width}
+                                    onChange={(e) => handleUpdateImage(image.id, { width: parseInt(e.target.value) || 200 })}
+                                    placeholder="Leveys"
+                                    className="text-sm w-20"
+                                  />
+                                  <Input 
+                                    type="number"
+                                    value={image.height}
+                                    onChange={(e) => handleUpdateImage(image.id, { height: parseInt(e.target.value) || 100 })}
+                                    placeholder="Korkeus"
+                                    className="text-sm w-20"
+                                  />
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    className="text-red-500"
+                                    onClick={() => handleRemoveImage(image.id)}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="html" className="space-y-4 pr-4">
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Pohjan nimi</Label>
+                        <Input 
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="Esim. Erikoislääkärin arviointi"
+                        />
+                      </div>
+                      <div className="flex flex-col flex-1 min-h-0">
+                        <Label className="mb-2">HTML-sisältö</Label>
+                        <Textarea 
+                          value={htmlContent}
+                          onChange={(e) => setHtmlContent(e.target.value)}
+                          placeholder="<!DOCTYPE html>..."
+                          className="min-h-[300px] max-h-[400px] font-mono text-sm flex-1"
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+                </ScrollArea>
+              </Tabs>
+            </div>
+
+            {/* Right side - Preview */}
+            <div className="border rounded-lg bg-gray-50 p-4 space-y-4 overflow-y-auto flex-1">
+              <Label className="text-sm font-medium mb-2 block flex items-center gap-2 sticky top-0 bg-gray-50 z-10">
+                <Move className="w-4 h-4" />
+                Esikatselu (vedä kuvia)
+              </Label>
+              
+              {/* HTML Preview when HTML tab is active */}
+              {activeTab === 'html' && htmlContent && (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className="bg-gradient-to-r from-gray-800 to-gray-700 px-4 py-2 text-white text-xs font-mono flex items-center justify-between">
+                    <span>HTML-esikatselu</span>
+                    <code className="text-gray-300">Live Preview</code>
+                  </div>
+                  <div className="p-4 h-96 overflow-auto bg-white">
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      className="prose prose-sm max-w-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* HTML Code Display when HTML tab is active */}
+              {activeTab === 'html' && htmlContent && (
+                <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-800 to-blue-700 px-4 py-2 text-white text-xs font-mono flex items-center justify-between">
+                    <span>HTML-koodi</span>
+                    <code className="text-blue-300">Source Code</code>
+                  </div>
+                  <pre className="p-4 h-64 overflow-auto bg-gray-900 text-gray-100 text-xs font-mono rounded-b-lg">
+                    <code>{htmlContent}</code>
+                  </pre>
+                </div>
+              )}
+
+              {/* Visual Preview when visual tab is active */}
+              {activeTab === 'visual' && (
+                <div 
+                  ref={previewRef}
+                  className="relative bg-white border-2 border-dashed border-gray-300 rounded-lg min-h-[500px] overflow-hidden"
+                >
+                  {/* Template preview content */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{newTemplateName || 'Uusi lomake'}</h3>
+                    <p className="text-sm text-gray-500 mb-4">{newTemplateDesc}</p>
+                    
+                    {fields.sort((a, b) => (a.order || 0) - (b.order || 0)).map((field) => (
+                      <div key={field.id} className="mb-3">
+                        <Label className="text-sm">{field.label}</Label>
+                        {field.type === 'textarea' ? (
+                          <div className="h-20 border rounded bg-gray-50 mt-1" />
+                        ) : field.type === 'checkbox' ? (
+                          <div className="flex gap-2 mt-1">
+                            <div className="w-4 h-4 border rounded" />
+                            <span className="text-sm text-gray-400">Vaihtoehto</span>
+                          </div>
+                        ) : field.type === 'approval' ? (
+                          <Button size="sm" className="mt-1 bg-green-600 hover:bg-green-700">
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Hyväksy
+                          </Button>
+                        ) : field.type === 'reject' ? (
+                          <Button size="sm" variant="destructive" className="mt-1">
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Hylkää
+                          </Button>
+                        ) : (
+                          <div className="h-8 border rounded bg-gray-50 mt-1" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Draggable images */}
+                  {images.map((image) => (
+                    <DraggableImage
+                      key={image.id}
+                      image={image}
+                      onUpdate={handleUpdateImage}
+                      onRemove={handleRemoveImage}
+                      containerRef={previewRef}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4 pt-4 border-t">
+            <Button variant="outline" onClick={() => {
+              setIsCreateDialogOpen(false);
+              setIsEditDialogOpen(false);
+              resetForm();
+            }}>
+              Peruuta
+            </Button>
+            <Button 
+              onClick={isEditDialogOpen ? handleSaveEdit : handleCreateTemplate}
+              disabled={!newTemplateName.trim() || (activeTab === 'visual' && fields.length === 0 && images.length === 0)}
+              className="bg-gradient-to-r from-[#0066b3] to-[#00a8b3]"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isEditDialogOpen ? 'Tallenna muutokset' : 'Luo pohja'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
                     <div className="space-y-4">
                       <div>
                         <Label>Pohjan nimi</Label>

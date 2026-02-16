@@ -36,24 +36,43 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
       
       const element = document.createElement('div');
       element.innerHTML = sanitizedHtml;
+      element.style.padding = '20px';
+      element.style.backgroundColor = 'white';
       const elementWithWatermark = addWatermark(element);
       
       const opt = {
         margin: 10,
         filename: filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
         jsPDF: { orientation: 'portrait' as const, unit: 'mm' as const, format: 'a4' as const },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      html2pdf().set(opt).from(elementWithWatermark).toPdf().output('dataurlstring').then((pdfAsString: string) => {
-        resolve(pdfAsString);
-      });
+      // Use 'dataurlstring' to get base64 encoded PDF
+      html2pdf()
+        .set(opt)
+        .from(elementWithWatermark)
+        .save()
+        .output('dataurlstring')
+        .then((pdfAsString: string) => {
+          resolve(pdfAsString);
+        })
+        .catch((err: any) => {
+          reject(err);
+        });
     } catch (error) {
       reject(error);
     }
   });
+}
+
+// Convenience: create PDF snapshot from a DOM element (pass element or selector)
+export async function createPdfFromElementSelector(selector: string, filename = 'document.pdf') {
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (!el) throw new Error('Element not found for PDF snapshot');
+  // Use outerHTML to preserve styles within the element
+  return convertHtmlToPdf(el.outerHTML, filename);
 }
 
 /**
@@ -63,15 +82,32 @@ export async function convertHtmlToPdf(htmlContent: string, filename: string = '
  */
 export async function downloadHtmlAsPdf(htmlContent: string, filename: string = 'document.pdf'): Promise<void> {
   try {
-    const pdfUrl = await convertHtmlToPdf(htmlContent, filename);
+    // Use 'blob' output for direct download
+    const sanitizedHtml = htmlContent.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
     
-    // Create a link element and trigger download
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const element = document.createElement('div');
+    element.innerHTML = sanitizedHtml;
+    element.style.padding = '20px';
+    element.style.backgroundColor = 'white';
+    const elementWithWatermark = addWatermark(element);
+    
+    const opt = {
+      margin: 10,
+      filename: filename,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
+      jsPDF: { orientation: 'portrait' as const, unit: 'mm' as const, format: 'a4' as const },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    return new Promise((resolve, reject) => {
+      html2pdf()
+        .set(opt)
+        .from(elementWithWatermark)
+        .save()
+        .then(() => resolve())
+        .catch((err: any) => reject(err));
+    });
   } catch (error) {
     console.error('Error downloading PDF:', error);
     throw error;
@@ -90,19 +126,28 @@ export async function convertHtmlToPdfBlob(htmlContent: string): Promise<Blob> {
       
       const element = document.createElement('div');
       element.innerHTML = sanitizedHtml;
+      element.style.padding = '20px';
+      element.style.backgroundColor = 'white';
       const elementWithWatermark = addWatermark(element);
       
       const opt = {
         margin: 10,
         image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
         jsPDF: { orientation: 'portrait' as const, unit: 'mm' as const, format: 'a4' as const },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
-      html2pdf().set(opt).from(elementWithWatermark).toPdf().output('blob').then((pdf: Blob) => {
-        resolve(pdf);
-      });
+      html2pdf()
+        .set(opt)
+        .from(elementWithWatermark)
+        .output('blob')
+        .then((pdf: Blob) => {
+          resolve(pdf);
+        })
+        .catch((err: any) => {
+          reject(err);
+        });
     } catch (error) {
       reject(error);
     }

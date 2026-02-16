@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { convertHtmlToPdfBlob } from '@/lib/pdfConverter';
 import { 
   FileText, 
   Edit2, 
@@ -67,17 +68,35 @@ export function MuokkaaPage() {
 
   const handleSave = () => {
     if (editingTemplate) {
-      updateTemplate(editingTemplate, {
-        name: templateName,
-        description: templateDesc,
-        sections: [{
-          id: 'section-1',
-          title: 'Pääosio',
-          fields,
-        }],
-        html: activeTab === 'html' ? htmlContent : undefined,
-        images,
-      });
+      (async () => {
+        let snapshotDataUrl: string | undefined;
+        if (activeTab === 'html' && htmlContent) {
+          try {
+            const pdfBlob = await convertHtmlToPdfBlob(htmlContent);
+            snapshotDataUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(pdfBlob);
+            });
+          } catch (e) {
+            console.error('PDF snapshot generation failed:', e);
+            snapshotDataUrl = undefined;
+          }
+        }
+
+        updateTemplate(editingTemplate, {
+          name: templateName,
+          description: templateDesc,
+          sections: [{
+            id: 'section-1',
+            title: 'Pääosio',
+            fields,
+          }],
+          html: activeTab === 'html' ? htmlContent : undefined,
+          snapshotPdf: snapshotDataUrl,
+          images,
+        });
+      })();
       setEditingTemplate(null);
     }
   };

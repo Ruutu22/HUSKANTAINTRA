@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSavedForms, useApprovalRequests, useUsers } from '@/hooks/useStorage';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -57,7 +58,18 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
   const [confidentialPassword, setConfidentialPassword] = useState('');
   const [confidentialPasswordError, setConfidentialPasswordError] = useState('');
 
+  const { user } = useAuth();
+
   const filteredForms = searchForms(searchQuery).filter(form => {
+    // Confidential visibility: only JYL, creator, patient, or explicitly visible users may see
+    if (form.isConfidential) {
+      const isCreator = user && (form.createdBy === user.id || form.createdByName === user.name || form.createdBy === user.name);
+      const isPatientOwner = user?.isPatient && form.patientId && user.patientId === form.patientId;
+      const isJYL = user?.role === 'JYL';
+      const explicitlyVisible = user && form.visibleTo && form.visibleTo.includes(user.id);
+      if (!(isCreator || isPatientOwner || isJYL || explicitlyVisible)) return false;
+    }
+
     if (activeTab === 'confidential') return form.isConfidential;
     if (activeTab === 'pending') return form.status === 'pending';
     if (activeTab === 'approved') return form.status === 'approved';
@@ -175,6 +187,12 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
   };
 
   const handlePrint = () => {
+    // If a snapshot PDF is available, open it in a new window for printing/downloading
+    if (selectedFormData?.snapshotPdf) {
+      const w = window.open(selectedFormData.snapshotPdf, '_blank');
+      if (w) w.focus();
+      return;
+    }
     window.print();
   };
 
@@ -397,17 +415,23 @@ export function TallennetutPage({ onEditForm }: TallennetutPageProps) {
           <ScrollArea className="max-h-[60vh]">
             <div className="p-4 bg-white">
               {selectedFormData && (
-                <div className="printable-form">
-                  <div className="watermark">.ruutu</div>
-                  <h1 className="text-xl font-bold mb-4">{selectedFormData.templateName}</h1>
-                  <p><strong>Potilas:</strong> {selectedFormData.patientName}</p>
-                  <p><strong>Päivämäärä:</strong> {format(new Date(selectedFormData.createdAt), 'dd.MM.yyyy', { locale: fi })}</p>
-                  <p><strong>Lääkäri:</strong> {selectedFormData.createdByName || selectedFormData.createdBy}</p>
-                  <hr className="my-4" />
-                  <pre className="whitespace-pre-wrap text-sm">
-                    {JSON.stringify(selectedFormData.data, null, 2)}
-                  </pre>
-                </div>
+                selectedFormData.snapshotPdf ? (
+                  <div className="w-full h-[600px]">
+                    <iframe title="snapshot" src={selectedFormData.snapshotPdf} className="w-full h-full" />
+                  </div>
+                ) : (
+                  <div className="printable-form">
+                    <div className="watermark">.ruutu</div>
+                    <h1 className="text-xl font-bold mb-4">{selectedFormData.templateName}</h1>
+                    <p><strong>Potilas:</strong> {selectedFormData.patientName}</p>
+                    <p><strong>Päivämäärä:</strong> {format(new Date(selectedFormData.createdAt), 'dd.MM.yyyy', { locale: fi })}</p>
+                    <p><strong>Lääkäri:</strong> {selectedFormData.createdByName || selectedFormData.createdBy}</p>
+                    <hr className="my-4" />
+                    <pre className="whitespace-pre-wrap text-sm">
+                      {JSON.stringify(selectedFormData.data, null, 2)}
+                    </pre>
+                  </div>
+                )
               )}
             </div>
           </ScrollArea>

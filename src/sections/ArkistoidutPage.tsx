@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSavedForms } from '@/hooks/useStorage';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,8 +33,20 @@ export function ArkistoidutPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Search through archived forms
+  const { user } = useAuth();
+
   const filteredForms = searchForms(searchQuery, true).filter(form => {
     if (!form.isArchived) return false;
+
+    // Confidential visibility restriction
+    if (form.isConfidential) {
+      const isCreator = user && (form.createdBy === user.id || form.createdByName === user.name || form.createdBy === user.name);
+      const isPatientOwner = user?.isPatient && form.patientId && user.patientId === form.patientId;
+      const isJYL = user?.role === 'JYL';
+      const explicitlyVisible = user && form.visibleTo && form.visibleTo.includes(user.id);
+      if (!(isCreator || isPatientOwner || isJYL || explicitlyVisible)) return false;
+    }
+
     if (activeTab === 'confidential') return form.isConfidential;
     if (activeTab === 'normal') return !form.isConfidential;
     return true;

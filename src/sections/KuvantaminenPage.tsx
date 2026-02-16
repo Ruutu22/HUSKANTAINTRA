@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Scan, Plus, FileText, CheckCircle, Brain, Activity } from 'lucide-react';
+import { Scan, Plus, FileText, CheckCircle, Brain, Activity, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 const IMAGING_TYPES = [
   { id: 'xray', name: 'Röntgen', icon: Scan, description: 'Perusröntgenkuvaus' },
@@ -43,6 +44,10 @@ export function KuvantaminenPage() {
   const [priority, setPriority] = useState<'normal' | 'urgent' | 'stat'>('normal');
   const [selectedStudy, setSelectedStudy] = useState<any>(null);
   const [reportText, setReportText] = useState('');
+  const [isAssignPatientOpen, setIsAssignPatientOpen] = useState(false);
+  const [assignmentPatient, setAssignmentPatient] = useState<any>(null);
+  const [assignmentPatientSearch, setAssignmentPatientSearch] = useState('');
+  const [studyToAssign, setStudyToAssign] = useState<any>(null);
 
   const filteredPatients = patientSearch ? searchPatients(patientSearch) : patients;
   const pendingStudies = getPendingStudies();
@@ -110,11 +115,61 @@ export function KuvantaminenPage() {
       targetName: `Kuvantamistutkimus ${studyId}`,
       details: 'Aikataulutettu suoritukselle',
     });
+    
+    toast.success('Tutkimus aikataulutettu');
+  };
+
+  const handleSendForTesting = (studyId: string) => {
+    if (!user) return;
+    
+    updateStudy(studyId, { status: 'in_progress' });
+    
+    addLog({
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'update_form',
+      targetName: `Kuvantamistutkimus ${studyId}`,
+      details: 'Lähetetty tutkimukseen',
+    });
+    
+    toast.success('Tutkimus lähetetty suoritukseen');
   };
 
   const handleOpenReport = (study: any) => {
     setSelectedStudy(study);
     setReportText('');
+  };
+
+  const handleAssignPatient = (study: any) => {
+    setStudyToAssign(study);
+    setIsAssignPatientOpen(true);
+    setAssignmentPatient(null);
+    setAssignmentPatientSearch('');
+  };
+
+  const handleConfirmAssignPatient = () => {
+    if (!studyToAssign || !assignmentPatient || !user) return;
+    
+    updateStudy(studyToAssign.id, {
+      status: 'patient_assigned',
+      assignedToPatientId: assignmentPatient.id,
+      assignedToPatientName: `${assignmentPatient.firstName} ${assignmentPatient.lastName}`,
+    });
+    
+    addLog({
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'update_form',
+      targetName: `Kuvantamistutkimus ${studyToAssign.id}`,
+      details: `Lähetetty potilaalle ${assignmentPatient.firstName} ${assignmentPatient.lastName}`,
+    });
+
+    setIsAssignPatientOpen(false);
+    setStudyToAssign(null);
+    setAssignmentPatient(null);
+    setAssignmentPatientSearch('');
   };
 
   const getStatusColor = (status: string) => {
@@ -134,6 +189,7 @@ export function KuvantaminenPage() {
       case 'completed': return 'Valmis';
       case 'in_progress': return 'Meneillään';
       case 'scheduled': return 'Ajastettu';
+      case 'patient_assigned': return 'Lähetetty potilaalle';
       case 'ordered': return 'Tilattu';
       default: return status;
     }
@@ -184,7 +240,7 @@ export function KuvantaminenPage() {
 
         <TabsContent value="pending">
           <div className="space-y-3">
-            {pendingStudies.filter(s => user?.isPatient ? s.patientId === user.patientId : true).map((study) => (
+            {pendingStudies.filter(s => user?.isPatient ? s.patientId === user.patientId || s.assignedToPatientId === user.patientId : true).map((study) => (
               <Card key={study.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -207,25 +263,47 @@ export function KuvantaminenPage() {
                         {getStatusText(study.status)}
                       </Badge>
                       <p className="text-sm text-gray-500">{study.orderedByName}</p>
-                      <div className="flex gap-2 mt-2">
+                      <div className="flex gap-2 mt-2 flex-wrap justify-end">
                         {study.status === 'ordered' && !user?.isPatient && (
+                          <>
+                            <Button 
+                              onClick={() => handleAssignPatient(study)}
+                              size="sm" 
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Lähetä potilaalle
+                            </Button>
+                            <Button 
+                              onClick={() => handleSendForTesting(study.id)}
+                              size="sm" 
+                              className="bg-orange-500 hover:bg-orange-600 text-white"
+                            >
+                              <Scan className="w-3 h-3 mr-1" />
+                              Lähetä tutkimukseen
+                            </Button>
+                          </>
+                        )}
+                        {(study.status === 'patient_assigned' || study.status === 'scheduled' || study.status === 'in_progress') && !user?.isPatient && (
                           <Button 
-                            onClick={() => handleScheduleStudy(study.id)}
+                            onClick={() => handleOpenReport(study)}
                             size="sm" 
-                            className="bg-orange-500 hover:bg-orange-600 text-white"
+                            className="bg-blue-500 hover:bg-blue-600 text-white"
                           >
-                            <Scan className="w-3 h-3 mr-1" />
-                            Aikatauluta
+                            <FileText className="w-3 h-3 mr-1" />
+                            Kirjaa tulokset
                           </Button>
                         )}
-                        <Button 
-                          onClick={() => handleOpenReport(study)}
-                          size="sm" 
-                          variant="outline"
-                        >
-                          <FileText className="w-3 h-3 mr-1" />
-                          {study.report ? 'Katsele lausuntoa' : 'Lisää lausunto'}
-                        </Button>
+                        {(study.status === 'patient_assigned' || study.status === 'scheduled' || study.status === 'in_progress') && user?.isPatient && (
+                          <Button 
+                            onClick={() => handleOpenReport(study)}
+                            size="sm" 
+                            variant="outline"
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            {study.report ? 'Katsele tuloksia' : 'Odota tuloksia'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -384,6 +462,11 @@ export function KuvantaminenPage() {
         </DialogContent>
       </Dialog>
 
+      </div>
+    );
+  }
+
+
       {/* Report Dialog */}
       <Dialog open={!!selectedStudy} onOpenChange={() => setSelectedStudy(null)}>
         <DialogContent className="max-w-2xl">
@@ -440,6 +523,52 @@ export function KuvantaminenPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
+
+      {/* Assign Patient Dialog */}
+      <Dialog open={isAssignPatientOpen} onOpenChange={setIsAssignPatientOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lähetä potilaalle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Etsi potilas</Label>
+              <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Hae potilaan nimellä..."
+                  value={assignmentPatientSearch}
+                  onChange={(e) => setAssignmentPatientSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="border rounded-lg max-h-64 overflow-y-auto">
+              {(assignmentPatientSearch ? searchPatients(assignmentPatientSearch) : patients)
+                .filter(p => !p.isStaff)
+                .map((patient: any) => (
+                  <div
+                    key={patient.id}
+                    onClick={() => setAssignmentPatient(patient)}
+                    className={`p-3 border-b cursor-pointer hover:bg-gray-50 ${
+                      assignmentPatient?.id === patient.id ? 'bg-blue-50 border-blue-500' : ''
+                    }`}
+                  >
+                    <p className="font-medium">{patient.firstName} {patient.lastName}</p>
+                    <p className="text-sm text-gray-500">{patient.phoneNumber || 'Ei numeroa'}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignPatientOpen(false)}>Peruuta</Button>
+            <Button 
+              onClick={handleConfirmAssignPatient}
+              disabled={!assignmentPatient}
+              className="bg-green-500 hover:bg-green-600"
+            >
+              Lähetä
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNotices } from '@/hooks/useStorage';
+import { useNotices, useNotifications } from '@/hooks/useStorage';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -39,6 +39,7 @@ import { medications, medicationCategories, type MedicationData } from '@/data/m
 
 export function OhjeistuksetPage() {
   const { addNotice, deleteNotice, getActiveNotices } = useNotices();
+  const { sendNotification } = useNotifications();
   const { user, isJYL } = useAuth();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +114,7 @@ export function OhjeistuksetPage() {
   const handleCreate = () => {
     if (title.trim() && content.trim()) {
       const expiresAt = expiresDays ? new Date(Date.now() + parseInt(expiresDays) * 24 * 60 * 60 * 1000) : undefined;
+      const visible = ['all'];
       addNotice({
         title: title.trim(),
         content: content.trim(),
@@ -121,8 +123,34 @@ export function OhjeistuksetPage() {
         isPinned,
         createdBy: user?.name || 'Tuntematon',
         expiresAt,
-        visibleToRoles: ['all'],
+        visibleToRoles: visible,
       });
+
+      // Also send a notification so users receive it in the notifications center
+      try {
+        const notifPayload: any = {
+          title: title.trim(),
+          message: content.trim().slice(0, 200),
+          sentBy: user?.id || 'system',
+          sentByName: user?.name || 'Järjestelmä',
+          priority,
+        };
+
+        // Map visibility to notification targets
+        if (visible.includes('all')) {
+          // leave targets empty => visible to all
+        } else if (visible.includes('patients')) {
+          notifPayload.targetRoles = ['POTILAS'];
+        } else if (visible.includes('staff')) {
+          notifPayload.targetRoles = ['JYL','ERIKOISLÄÄKÄRI','LÄÄKÄRI','HOITAJA','ENSIHOITAJA','CUSTOM'];
+        } else {
+          notifPayload.targetRoles = visible;
+        }
+
+        sendNotification(notifPayload);
+      } catch (e) {
+        console.warn('Failed to send broadcast notification', e);
+      }
       setTitle('');
       setContent('');
       setType('tiedote');

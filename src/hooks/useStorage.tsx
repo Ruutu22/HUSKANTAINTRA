@@ -47,6 +47,17 @@ export function useJobTitles() {
     return newTitle.id;
   }, [setJobTitles]);
 
+  const addJobTitles = useCallback((titles: Omit<JobTitle, 'id'>[]) => {
+    const createdIds: string[] = [];
+    const newTitles = titles.map(t => {
+      const nt: JobTitle = { ...t, id: Math.random().toString(36).substr(2, 9) };
+      createdIds.push(nt.id);
+      return nt;
+    });
+    setJobTitles(prev => [...prev, ...newTitles]);
+    return createdIds;
+  }, [setJobTitles]);
+
   const updateJobTitle = useCallback((id: string, updates: Partial<JobTitle>) => {
     setJobTitles(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   }, [setJobTitles]);
@@ -62,6 +73,7 @@ export function useJobTitles() {
   return {
     jobTitles,
     addJobTitle,
+    addJobTitles,
     updateJobTitle,
     deleteJobTitle,
     getJobTitleById,
@@ -403,10 +415,17 @@ export function useNotices() {
     const now = new Date();
     return notices.filter(n => {
       if (n.expiresAt && new Date(n.expiresAt) < now) return false;
-      if (userRole && n.visibleToRoles && n.visibleToRoles.length > 0) {
+      // If no visibility restrictions, show to everyone
+      if (!n.visibleToRoles || n.visibleToRoles.length === 0) return true;
+
+      // Special tokens: 'all', 'staff', 'patients'
+      if (n.visibleToRoles.includes('all')) return true;
+      if (userRole) {
+        if (n.visibleToRoles.includes('staff') && userRole !== 'POTILAS') return true;
+        if (n.visibleToRoles.includes('patients') && userRole === 'POTILAS') return true;
         return n.visibleToRoles.includes(userRole);
       }
-      return true;
+      return false;
     }).sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -1204,7 +1223,7 @@ export function useChat() {
     };
     setMessages(prev => [...prev, newMessage]);
     return newMessage.id;
-  }, [setMessages]);
+  }, [setMessages, setConversations]);
 
   const editMessage = useCallback((id: string, newContent: string) => {
     setMessages(prev => prev.map(m => 
@@ -1260,15 +1279,27 @@ export function useSharedNotes() {
     setNotes(prev => prev.filter(n => n.id !== id));
   }, [setNotes]);
 
-  const getVisibleNotes = useCallback((userRole: string, isJYL: boolean) => {
+  const getVisibleNotes = useCallback((userRole: string, isJYL: boolean, userId?: string) => {
     if (isJYL) return notes;
-    return notes.filter(n => 
-      !n.visibleToRoles || n.visibleToRoles.length === 0 || n.visibleToRoles.includes(userRole)
-    );
+
+    // Patients see notes marked visibleToPatient (default true)
+    if (userRole === 'POTILAS') {
+      return notes.filter(n => n.visibleToPatient !== false);
+    }
+
+    // Staff: show notes that either are not confidential and match role, or notes authored by the user
+    return notes.filter(n => {
+      if (n.confidential) {
+        // confidential notes: only author and JYL and patient can see
+        return n.createdBy === userId;
+      }
+      if (!n.visibleToRoles || n.visibleToRoles.length === 0) return true;
+      return n.visibleToRoles.includes(userRole);
+    });
   }, [notes]);
 
-  const getPinnedNotes = useCallback((userRole: string, isJYL: boolean) => {
-    return getVisibleNotes(userRole, isJYL).filter(n => n.isPinned);
+  const getPinnedNotes = useCallback((userRole: string, isJYL: boolean, userId?: string) => {
+    return getVisibleNotes(userRole, isJYL, userId).filter(n => n.isPinned);
   }, [getVisibleNotes]);
 
   return {
@@ -1854,6 +1885,7 @@ export function usePatientReminders() {
 // Lab Orders hook
 export function useLabOrders() {
   const [orders, setOrders] = useLocalStorage<LabOrder[]>('hus_lab_orders', []);
+  const { sendNotification } = useNotifications();
 
   const createOrder = useCallback((order: Omit<LabOrder, 'id' | 'orderedAt'>) => {
     const newOrder: LabOrder = {
@@ -1863,7 +1895,7 @@ export function useLabOrders() {
     };
     setOrders(prev => [newOrder, ...prev]);
     return newOrder.id;
-  }, [setOrders]);
+  }, [setOrders, orders, sendNotification]);
 
   const updateOrder = useCallback((id: string, updates: Partial<LabOrder>) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
@@ -1873,6 +1905,23 @@ export function useLabOrders() {
     setOrders(prev => prev.map(o => 
       o.id === id ? { ...o, status: 'completed' as const, completedAt: new Date(), results } : o
     ));
+
+    // notify patient if present
+    try {
+      const order = orders.find(o => o.id === id);
+      if (order && order.patientId) {
+        sendNotification({
+          title: 'Laboratoriotulokset valmiit',
+          message: `Tulokset ovat saatavilla: ${order.patientName}`,
+          sentBy: 'system',
+          sentByName: 'Järjestelmä',
+          targetUsers: [order.patientId],
+          priority: 'normal',
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
   }, [setOrders]);
 
   const getOrdersByPatient = useCallback((patientId: string) => {
@@ -1898,6 +1947,7 @@ export function useLabOrders() {
 // Imaging Studies hook
 export function useImagingStudies() {
   const [studies, setStudies] = useLocalStorage<ImagingStudy[]>('hus_imaging_studies', []);
+  const { sendNotification } = useNotifications();
 
   const createStudy = useCallback((study: Omit<ImagingStudy, 'id' | 'orderedAt'>) => {
     const newStudy: ImagingStudy = {
@@ -1907,7 +1957,7 @@ export function useImagingStudies() {
     };
     setStudies(prev => [newStudy, ...prev]);
     return newStudy.id;
-  }, [setStudies]);
+  }, [setStudies, studies, sendNotification]);
 
   const updateStudy = useCallback((id: string, updates: Partial<ImagingStudy>) => {
     setStudies(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -1923,6 +1973,22 @@ export function useImagingStudies() {
         reportedAt: new Date() 
       } : s
     ));
+
+    try {
+      const study = studies.find(s => s.id === id);
+      if (study && study.patientId) {
+        sendNotification({
+          title: 'Kuvantamistutkimuksen raportti valmis',
+          message: `Raportti valmiina potilaalle ${study.patientName}`,
+          sentBy: radiologist || 'system',
+          sentByName: radiologist || 'Järjestelmä',
+          targetUsers: [study.patientId],
+          priority: 'normal',
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
   }, [setStudies]);
 
   const getStudiesByPatient = useCallback((patientId: string) => {
@@ -2443,40 +2509,105 @@ export function usePatientMedications() {
 export function useMessages() {
   const [messages, setMessages] = useLocalStorage<Message[]>('hus_messages', []);
   const [conversations, setConversations] = useLocalStorage<Conversation[]>('hus_conversations', []);
+  const { sendNotification } = useNotifications();
 
   const createConversation = useCallback((participantIds: string[], participantNames: string[]) => {
+    // avoid duplicate conversations (order-insensitive)
+    const existing = conversations.find(c => {
+      if (c.participantIds.length !== participantIds.length) return false;
+      return participantIds.every(id => c.participantIds.includes(id));
+    });
+    if (existing) return existing.id;
+
     const newConversation: Conversation = {
       id: Math.random().toString(36).substr(2, 9),
-      participantIds,
+      participantIds: participantIds.sort(), // Sort for consistent matching
       participantNames,
       createdAt: new Date(),
       isActive: true,
+      unreadCount: 0,
+      lastMessage: '',
+      lastMessageAt: new Date(),
     };
     setConversations(prev => [...prev, newConversation]);
     return newConversation.id;
-  }, [setConversations]);
+  }, [conversations, setConversations]);
 
   const sendMessage = useCallback((message: Omit<Message, 'id' | 'createdAt' | 'isRead' | 'readAt'>) => {
+    // Determine recipient from conversation participants if not provided
+    const conv = conversations.find(c => c.id === message.conversationId);
+    let recipientId = (message as any).recipientId || '';
+    let recipientName = (message as any).recipientName || '';
+    if (conv) {
+      const otherIndex = conv.participantIds.findIndex(id => id !== message.senderId);
+      if (otherIndex !== -1) {
+        recipientId = conv.participantIds[otherIndex];
+        recipientName = conv.participantNames[otherIndex] || recipientName;
+      }
+    }
+
     const newMessage: Message = {
       ...message,
       id: Math.random().toString(36).substr(2, 9),
       createdAt: new Date(),
       isRead: false,
+      recipientId,
+      recipientName,
     };
     setMessages(prev => [...prev, newMessage]);
-    
-    // Update conversation
-    setConversations(prev => prev.map(c => c.id === message.conversationId ? {
-      ...c,
-      lastMessage: message.content,
-      lastMessageAt: new Date(),
-    } : c));
-    
+
+    // Update conversation metadata and unread count for recipient
+    setConversations(prev => prev.map(c => {
+      if (c.id !== message.conversationId) return c;
+      const updated = {
+        ...c,
+        lastMessage: newMessage.content,
+        lastMessageAt: new Date(),
+      } as Conversation;
+
+      // increment unreadCount for recipient
+      if (newMessage.recipientId) {
+        updated.unreadCount = (c.unreadCount || 0) + 1;
+      }
+
+      return updated;
+    }));
+
+    // Send a notification to the recipient if available
+    try {
+      if (newMessage.recipientId) {
+        sendNotification({
+          title: `Uusi viesti: ${newMessage.senderName}`,
+          message: newMessage.content.slice(0, 200),
+          sentBy: newMessage.senderId,
+          sentByName: newMessage.senderName,
+          targetUsers: [newMessage.recipientId],
+          priority: 'normal',
+        });
+      }
+    } catch (e) {
+      // ignore notification errors in local dev
+    }
+
     return newMessage.id;
   }, [setMessages, setConversations]);
 
   const markAsRead = useCallback((messageId: string) => {
-    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isRead: true, readAt: new Date() } : m));
+    setMessages(prev => {
+      const updated = prev.map(m => m.id === messageId ? { ...m, isRead: true, readAt: new Date() } : m);
+
+      // update conversation unread counts
+      const msg = updated.find(m => m.id === messageId);
+      if (msg) {
+        setConversations(prevConvs => prevConvs.map(c => {
+          if (c.id !== msg.conversationId) return c;
+          const unread = updated.filter(m => m.conversationId === c.id && !m.isRead).length;
+          return { ...c, unreadCount: unread } as Conversation;
+        }));
+      }
+
+      return updated;
+    });
   }, [setMessages]);
 
   const getConversation = useCallback((conversationId: string) => {
