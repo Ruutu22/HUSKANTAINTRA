@@ -4,23 +4,6 @@
 
 **.ruudun luoma HUS järjestelmä** - Terveydenhuollon ammattilaisten kokonaisvaltainen työkalu.
 
-## 🌐 Live-demo
-
-🔗 **https://zehf5ahiz45xc.ok.kimi.link**
-
-## 🔑 Kirjautuminen
-
-### Johtava Ylilääkäri (JYL) - Täysi pääsy
-```
-Käyttäjätunnus: ruutu.koskela
-Salasana: Ruutu243
-```
-
-### Testitilit
-```
-Lääkäri: tohtori.makela / Makela456!
-Hoitaja: hoitaja.niemi / Niemi2024!
-```
 
 ## ✨ Ominaisuudet
 
